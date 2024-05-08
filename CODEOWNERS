@@ -1,0 +1,9 @@
+# Default Owners
+* @containers/podman-desktop-reviewers @benoitf
+
+# website
+website/** @containers/podman-desktop-reviewers @slemeur @cdrage @benoitf
+
+# playwright tests
+tests/playwright/** @containers/podman-desktop-reviewers @containers/podman-desktop-qe-reviewers @benoitf
+

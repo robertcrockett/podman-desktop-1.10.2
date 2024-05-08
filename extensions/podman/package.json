@@ -1,0 +1,378 @@
+{
+  "name": "podman",
+  "displayName": "Podman",
+  "description": "Integration for Podman and Podman Machines",
+  "version": "1.10.1",
+  "icon": "icon.png",
+  "type": "module",
+  "publisher": "podman-desktop",
+  "license": "Apache-2.0",
+  "engines": {
+    "podman-desktop": "^0.0.1"
+  },
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "podman.socketCompatibilityMode",
+        "title": "Podman: Socket Compatibility Mode"
+      },
+      {
+        "command": "podman.onboarding.checkInstalledCommand",
+        "title": "Podman: Check podman installation"
+      },
+      {
+        "command": "podman.onboarding.checkRequirementsCommand",
+        "title": "Podman: Check system requirements to install podman"
+      },
+      {
+        "command": "podman.onboarding.checkPodmanMachineExistsCommand",
+        "title": "Podman: Check if a podman machine exists"
+      },
+      {
+        "command": "podman.onboarding.installPodman",
+        "title": "Podman: Install podman"
+      },
+      {
+        "command": "podman.onboarding.checkUnsupportedPodmanMachine",
+        "title": "Podman: Check if an old unsupported podman machine exists"
+      },
+      {
+        "command": "podman.onboarding.removeUnsupportedMachines",
+        "title": "Podman: Remove unsupported podman machines"
+      }
+    ],
+    "configuration": {
+      "title": "Podman",
+      "properties": {
+        "podman.binary.path": {
+          "type": "string",
+          "format": "file",
+          "default": "",
+          "description": "Custom path to Podman binary (Default is blank)"
+        },
+        "podman.machine.cpus": {
+          "type": "number",
+          "format": "cpu",
+          "minimum": 1,
+          "default": "HOST_HALF_CPU_CORES",
+          "maximum": "HOST_TOTAL_CPU",
+          "scope": "ContainerConnection",
+          "description": "CPU(s)"
+        },
+        "podman.machine.cpusUsage": {
+          "type": "number",
+          "format": "cpuUsage",
+          "scope": "ContainerConnection",
+          "description": "CPU(s) usage",
+          "readonly": true
+        },
+        "podman.machine.memory": {
+          "type": "number",
+          "format": "memory",
+          "minimum": 1000000000,
+          "default": 4000000000,
+          "maximum": "HOST_TOTAL_MEMORY",
+          "scope": "ContainerConnection",
+          "step": 500000000,
+          "description": "Memory"
+        },
+        "podman.machine.memoryUsage": {
+          "type": "number",
+          "format": "memoryUsage",
+          "scope": "ContainerConnection",
+          "description": "Memory usage",
+          "readonly": true
+        },
+        "podman.machine.diskSize": {
+          "type": "number",
+          "format": "diskSize",
+          "default": 100000000000,
+          "maximum": "HOST_TOTAL_DISKSIZE",
+          "scope": "ContainerConnection",
+          "step": 500000000,
+          "description": "Disk size"
+        },
+        "podman.machine.diskSizeUsage": {
+          "type": "number",
+          "format": "diskSizeUsage",
+          "scope": "ContainerConnection",
+          "description": "Disk size usage",
+          "readonly": true
+        },
+        "podman.factory.machine.name": {
+          "type": "string",
+          "default": "podman-machine-default",
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "Name"
+        },
+        "podman.factory.machine.cpus": {
+          "type": "number",
+          "format": "cpu",
+          "default": "HOST_HALF_CPU_CORES",
+          "minimum": 1,
+          "maximum": "HOST_TOTAL_CPU",
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "CPU(s)",
+          "when": "podman.podmanMachineCpuSupported"
+        },
+        "podman.factory.machine.memory": {
+          "type": "number",
+          "format": "memory",
+          "minimum": 1000000000,
+          "default": 4000000000,
+          "maximum": "HOST_TOTAL_MEMORY",
+          "scope": "ContainerProviderConnectionFactory",
+          "step": 500000000,
+          "description": "Memory",
+          "when": "podman.podmanMachineMemorySupported"
+        },
+        "podman.factory.machine.diskSize": {
+          "type": "number",
+          "format": "diskSize",
+          "default": 100000000000,
+          "minimum": 10000000000,
+          "maximum": "HOST_TOTAL_DISKSIZE",
+          "step": 500000000,
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "Disk size",
+          "when": "podman.podmanMachineDiskSupported"
+        },
+        "podman.factory.machine.image-path": {
+          "type": "string",
+          "format": "file",
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "Image Path (Optional)"
+        },
+        "podman.factory.machine.rootful": {
+          "type": "boolean",
+          "default": true,
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "Machine with root privileges",
+          "when": "podman.isRootfulMachineInitSupported == true"
+        },
+        "podman.factory.machine.user-mode-networking": {
+          "type": "boolean",
+          "default": false,
+          "scope": "ContainerProviderConnectionFactory",
+          "markdownDescription": "User mode networking (traffic relayed by a user process). See [documentation](https://docs.podman.io/en/latest/markdown/podman-machine-init.1.html#user-mode-networking).",
+          "when": "podman.isUserModeNetworkingSupported == true"
+        },
+        "podman.factory.machine.now": {
+          "type": "boolean",
+          "default": true,
+          "scope": "ContainerProviderConnectionFactory",
+          "description": "Start the machine now",
+          "when": "podman.isStartNowAtMachineInitSupported"
+        },
+        "podman.setting.dockerCompatibility": {
+          "type": "boolean",
+          "default": false,
+          "description": "Docker compatibility mode is a feature that allows you to use Podman as a drop-in replacement for Docker-compatible CLI tools. Podman will automatically emulate a Docker API socket connection (typically) to /var/run/docker.sock. NOTE: This requires administrative privileges.",
+          "when": "isMac"
+        }
+      }
+    },
+    "icons": {
+      "podman-icon": {
+        "description": "Podman icon",
+        "default": {
+          "fontPath": "podman.woff2",
+          "fontCharacter": "\\0041"
+        }
+      }
+    },
+    "onboarding": {
+      "title": "Podman Setup",
+      "steps": [
+        {
+          "id": "checkInstalledCommand",
+          "title": "Checking for Podman installation",
+          "command": "podman.onboarding.checkInstalledCommand",
+          "completionEvents": [
+            "onCommand:podman.onboarding.checkInstalledCommand"
+          ]
+        },
+        {
+          "id": "welcomeInstallationView",
+          "title": "We could not find Podman. Let's install it!",
+          "when": "onboardingContext:podmanIsNotInstalled"
+        },
+        {
+          "id": "checkRequirementsCommand",
+          "title": "Checking for system requirements to install Podman",
+          "when": "onboardingContext:podmanIsNotInstalled",
+          "command": "podman.onboarding.checkRequirementsCommand",
+          "completionEvents": [
+            "onCommand:podman.onboarding.checkRequirementsCommand"
+          ]
+        },
+        {
+          "id": "missingRequirementsView",
+          "title": "Some system requirements are missing",
+          "when": "onboardingContext:requirementsStatus == failed && onboardingContext:podmanIsNotInstalled",
+          "completionEvents": [
+            "onboardingContext:requirementsStatus == ok"
+          ],
+          "content": [
+            [
+              {
+                "value": ":warnings[${onboardingContext:warningsMarkdown}]"
+              }
+            ],
+            [
+              {
+                "value": "When possible, we've provided information on how to address these requirements."
+              }
+            ],
+            [
+              {
+                "value": ":button[Check requirements again]{command=podman.onboarding.checkRequirementsCommand}"
+              }
+            ]
+          ]
+        },
+        {
+          "id": "installOnLinuxInstructionsView",
+          "title": "Installing Podman",
+          "when": "onboardingContext:podmanIsNotInstalled && isLinux",
+          "completionEvents": [
+            "!onboardingContext:podmanIsNotInstalled"
+          ],
+          "content": [
+            [
+              {
+                "value": "To install Podman please follow these :link[installation instructions]{href=https://podman.io/docs/installation#installing-on-linux}"
+              }
+            ]
+          ]
+        },
+        {
+          "id": "autoInstallCommand",
+          "title": "Installing Podman",
+          "description": "Once installed, we will enable and configure the extension",
+          "when": "onboardingContext:podmanIsNotInstalled && !isLinux",
+          "command": "podman.onboarding.installPodman",
+          "completionEvents": [
+            "onCommand:podman.onboarding.installPodman"
+          ]
+        },
+        {
+          "id": "installationFailure",
+          "title": "Failed installing Podman",
+          "when": "onboardingContext:podmanIsNotInstalled",
+          "state": "failed"
+        },
+        {
+          "id": "installationSuccessView",
+          "title": "Podman settings",
+          "when": "!onboardingContext:podmanIsNotInstalled && !podman.needPodmanMachineCleanup",
+          "content": [
+            [
+              {
+                "value": "${configuration:preferences.podman-desktop.podman.engine.autostart}"
+              }
+            ]
+          ]
+        },
+        {
+          "id": "checkUnsupportedPodmanMachineCommand",
+          "title": "Checking if an old unsupported Podman machine exists",
+          "when": "!isLinux",
+          "command": "podman.onboarding.checkUnsupportedPodmanMachine",
+          "completionEvents": [
+            "onCommand:podman.onboarding.checkUnsupportedPodmanMachine"
+          ]
+        },
+        {
+          "id": "welcomeFixUnsupportedPodmanMachineView",
+          "title": "Unsupported Podman machine detected",
+          "description": "Podman Desktop will remove the unsupported machines",
+          "completionEvents": [
+            "onboardingContext:unsupportedMachineRemoved == ok"
+          ],
+          "content": [
+            [
+              {
+                "value": "Podman Machines created by Podman v4 are no longer supported by v5"
+              }
+            ],
+            [
+              {
+                "value": ":button[Remove unsupported Podman machine(s)]{command=podman.onboarding.removeUnsupportedMachines}"
+              }
+            ],
+            [
+              {
+                "value": "Interrupt the process by clicking on `skip` or `skip the entire setup`"
+              }
+            ]
+          ],
+          "when": "onboardingContext:unsupportedPodmanMachine && !isLinux"
+        },
+        {
+          "id": "checkPodmanMachineExistsCommand",
+          "title": "Checking if a Podman machine exists",
+          "when": "!isLinux",
+          "command": "podman.onboarding.checkPodmanMachineExistsCommand",
+          "completionEvents": [
+            "onCommand:podman.onboarding.checkPodmanMachineExistsCommand"
+          ]
+        },
+        {
+          "id": "welcomeCreatePodmanMachineView",
+          "title": "We could not find any Podman machine. Let's create one!",
+          "when": "!onboardingContext:podmanMachineExists && !isLinux"
+        },
+        {
+          "id": "createPodmanMachineCommand",
+          "title": "Create a Podman machine",
+          "when": "!onboardingContext:podmanMachineExists && !isLinux",
+          "completionEvents": [
+            "onboardingContext:podmanMachineExists"
+          ],
+          "component": "createContainerProviderConnection"
+        },
+        {
+          "id": "onboardingSuccess",
+          "title": "Podman installed",
+          "when": "!onboardingContext:podmanIsNotInstalled",
+          "state": "completed",
+          "content": [
+            [],
+            [],
+            [
+              {
+                "value": "#### How to use podman \nRun `podman help` in the terminal for a list of commands to interact with Podman. For example, try the 'Create' button within the Containers tab of Podman Desktop and view your containers with `podman`:\n\n`$ podman ps`",
+                "highlight": true
+              }
+            ]
+          ]
+        }
+      ],
+      "enablement": "(isLinux && onboardingContext:podmanIsNotInstalled) || (!isLinux && !onboardingContext:podmanMachineExists) || podman.needPodmanMachineCleanup"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsx ./scripts/download.ts && node ./scripts/build.cjs",
+    "test": "vitest run --coverage --passWithNoTests",
+    "test:watch": "vitest watch --coverage --passWithNoTests",
+    "watch": "vite build -w"
+  },
+  "dependencies": {
+    "@ltd/j-toml": "^1.38.0",
+    "@podman-desktop/api": "^0.0.1",
+    "compare-versions": "^6.1.0",
+    "ps-list": "^8.1.1"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.12",
+    "hasha": "^6.0.0",
+    "mkdirp": "^3.0.1",
+    "nock": "^14.0.0-beta.6",
+    "octokit": "^3.2.0",
+    "tsx": "^4.7.3",
+    "vite": "^5.2.10",
+    "vitest": "^1.5.2"
+  }
+}
