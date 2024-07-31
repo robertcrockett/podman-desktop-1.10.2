@@ -1,7 +1,7 @@
 <script lang="ts">
+import { Button, Tooltip } from '@podman-desktop/ui-svelte';
+
 import MonacoEditor from '../editor/MonacoEditor.svelte';
-import Button from '../ui/Button.svelte';
-import Tooltip from '../ui/Tooltip.svelte';
 
 // Make sure that when using the MonacoEditor, the content is "stringified" before
 // being passed into this component. ex. stringify(kubeDeploymentYAML)
@@ -79,7 +79,7 @@ async function applyToCluster() {
   class="flex flex-row-reverse p-6 bg-transparent fixed bottom-0 right-0 mb-5 pr-10 max-h-20 bg-opacity-90 z-50"
   role="group"
   aria-label="Edit Buttons">
-  <Tooltip tip="Apply the changes to the cluster, similar to 'kubectl apply'" topLeft="{true}">
+  <Tooltip topLeft tip="Apply the changes to the cluster, similar to 'kubectl apply'">
     <Button
       type="primary"
       aria-label="Apply changes to cluster"
@@ -87,7 +87,7 @@ async function applyToCluster() {
       disabled="{!changesDetected}"
       inProgress="{inProgress}">Apply changes to cluster</Button>
   </Tooltip>
-  <Tooltip tip="Revert the changes to the original content" topLeft="{true}">
+  <Tooltip topLeft tip="Revert the changes to the original content">
     <Button
       type="secondary"
       aria-label="Revert changes"

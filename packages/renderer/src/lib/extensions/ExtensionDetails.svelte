@@ -1,4 +1,5 @@
 <script lang="ts">
+import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
 import { derived, type Readable } from 'svelte/store';
 
 import extensionIcon from '/@/lib/images/ExtensionIcon.svelte';
@@ -7,9 +8,7 @@ import { combinedInstalledExtensions } from '/@/stores/all-installed-extensions'
 import { catalogExtensionInfos } from '/@/stores/catalog-extensions';
 
 import FeaturedExtensionDownload from '../featured/FeaturedExtensionDownload.svelte';
-import Button from '../ui/Button.svelte';
 import DetailsPage from '../ui/DetailsPage.svelte';
-import EmptyScreen from '../ui/EmptyScreen.svelte';
 import ExtensionStatus from '../ui/ExtensionStatus.svelte';
 import type { ExtensionDetailsUI } from './extension-details-ui';
 import ExtensionBadge from './ExtensionBadge.svelte';
@@ -60,7 +59,9 @@ $: extension = derived(
           <InstalledExtensionActions class="w-48" extension="{$extension.installedExtension}" />
         {:else if $extension.fetchable}
           <div class="flex flex-1 justify-items-end w-18 flex-col items-end place-content-center">
-            <div class="italic text-xs text-gray-700 pb-3">Install this extension with a single click</div>
+            <div class="italic text-xs text-[var(--pd-content-text)] pb-3">
+              Install this extension with a single click
+            </div>
             <FeaturedExtensionDownload extension="{$extension}" />
           </div>
         {/if}

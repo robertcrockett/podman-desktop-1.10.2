@@ -8,13 +8,15 @@
     "strict": true,
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
 
     "types": ["node"],
 
     "baseUrl": ".",
     "paths": {
-      "/@/*": ["./src/*"]
+      "/@/*": ["./src/*"],
+      "/@api/*": ["../api/src/*"]
     }
   },
-  "include": ["src/**/*.ts", "exposedInMainWorld.d.ts", "../../types/**/*.d.ts"]
+  "include": ["src/**/*.ts", "exposedInMainWorld.d.ts", "../../types/**/*.d.ts", "../api/src/**/*.ts"]
 }

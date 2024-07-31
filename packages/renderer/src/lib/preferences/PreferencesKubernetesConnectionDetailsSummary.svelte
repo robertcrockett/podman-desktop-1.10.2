@@ -1,7 +1,8 @@
 <script lang="ts">
 import type { KubernetesProviderConnection } from '@podman-desktop/api';
 
-import type { ProviderKubernetesConnectionInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { ProviderKubernetesConnectionInfo } from '/@api/provider-info';
+
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import type { IProviderConnectionConfigurationPropertyRecorded } from './Util';
 
@@ -20,8 +21,8 @@ $: Promise.all(
             kubernetesConnectionInfo as unknown as KubernetesProviderConnection,
           )
         : undefined,
-      connection: kubernetesConnectionInfo?.name || '',
-      providerId: providerInternalId || '',
+      connection: kubernetesConnectionInfo?.name ?? '',
+      providerId: providerInternalId ?? '',
     };
   }),
 ).then(value => (tmpProviderContainerConfiguration = value.flat()));
@@ -31,7 +32,7 @@ $: providerConnectionConfiguration = tmpProviderContainerConfiguration.filter(
 );
 </script>
 
-<div class="h-full bg-zinc-900">
+<div class="h-full text-[var(--pd-table-body-text)]">
   {#if kubernetesConnectionInfo}
     <div class="flex pl-8 py-4 flex-col w-full text-sm">
       <div class="flex flex-row mt-5">

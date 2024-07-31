@@ -5,17 +5,13 @@ import {
   faRightFromBracket,
   faRightToBracket,
 } from '@fortawesome/free-solid-svg-icons';
+import { Button, DropdownMenu, EmptyScreen, Tooltip } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
 
 import EmbeddableCatalogExtensionList from '/@/lib/extensions/EmbeddableCatalogExtensionList.svelte';
-import Tooltip from '/@/lib/ui/Tooltip.svelte';
 
 import { authenticationProviders } from '../../stores/authenticationProviders';
 import KeyIcon from '../images/KeyIcon.svelte';
-import Button from '../ui/Button.svelte';
-import DropdownMenu from '../ui/DropdownMenu.svelte';
-import DropdownMenuItem from '../ui/DropDownMenuItem.svelte';
-import EmptyScreen from '../ui/EmptyScreen.svelte';
 import SettingsPage from './SettingsPage.svelte';
 </script>
 
@@ -35,9 +31,7 @@ import SettingsPage from './SettingsPage.svelte';
       {@const sessionRequests = provider.sessionRequests ?? []}
       <!-- Registered Authentication Provider row start -->
       <div class="flex flex-col w-full mb-5" role="listitem" aria-label="{provider.displayName}">
-        <div
-          class="flex rounded-md border-0 justify-between"
-          style="background-color: rgb(39 39 42 / var(--tw-bg-opacity))">
+        <div class="flex rounded-md border-0 justify-between bg-[var(--pd-invert-content-card-bg)]">
           <!-- Icon + status -->
           <div class="ml-4 flex items-center" aria-label="Provider Information">
             <!-- Icon -->
@@ -68,17 +62,23 @@ import SettingsPage from './SettingsPage.svelte';
             <!-- Authentication Provider name and status item start -->
             <div class="px-5 py-2 text-sm m-auto">
               <div class="flex flex-col">
-                <div class="flex items-center text-lg w-full h-full" aria-label="Provider Name">
+                <div
+                  class="flex items-center text-lg text-[var(--pd-invert-content-card-header-text)] w-full h-full"
+                  aria-label="Provider Name">
                   {provider.displayName}
                 </div>
                 <div class="flex flex-row items-center w-full h-full">
                   <dif>
                     <Fa
-                      class="h-3 w-3 text-md mr-2 text-{provider.accounts.length > 0 ? 'green' : 'gray'}-500"
+                      class="h-3 w-3 text-md mr-2 text-[var(--pd-status-{provider.accounts.length > 0
+                        ? 'connected'
+                        : 'disconnected'})]"
                       icon="{faCircle}" />
                   </dif>
                   <div
-                    class="uppercase text-xs text-{provider.accounts.length > 0 ? 'green' : 'gray'}-500"
+                    class="uppercase text-xs text-[var(--pd-status-{provider.accounts.length > 0
+                      ? 'connected'
+                      : 'disconnected'})]"
                     aria-label="Provider Status">
                     <span>
                       {provider.accounts.length > 0 ? 'Logged in' : 'Logged out'}
@@ -100,7 +100,7 @@ import SettingsPage from './SettingsPage.svelte';
                           aria-label="Logged In Username">
                           {account.label}
                         </span>
-                        <Tooltip tip="Sign out of {account.label}" bottomRight>
+                        <Tooltip bottomRight tip="Sign out of {account.label}">
                           <button
                             aria-label="Sign out of {account.label}"
                             class="pl-2 hover:cursor-pointer hover:text-white text-white"
@@ -120,7 +120,7 @@ import SettingsPage from './SettingsPage.svelte';
             {#if sessionRequests.length === 1}
               {@const request = sessionRequests[0]}
               <!-- Authentication Provider Auth Request Sign In button start -->
-              <Tooltip tip="Sign in to use {request.extensionLabel}" bottomLeft>
+              <Tooltip bottomLeft tip="Sign in to use {request.extensionLabel}">
                 <Button
                   aria-label="Sign in"
                   class="pl-2 mr-4 hover:cursor-pointer hover:text-white text-white"
@@ -135,7 +135,7 @@ import SettingsPage from './SettingsPage.svelte';
               <!-- Authentication Provider Auth Requests DropDown start -->
               <DropdownMenu>
                 {#each sessionRequests as request}
-                  <DropdownMenuItem
+                  <DropdownMenu.Item
                     title="Sign in to use {request.extensionLabel}"
                     onClick="{() => window.requestAuthenticationProviderSignIn(request.id)}"
                     icon="{faArrowRightToBracket}" />

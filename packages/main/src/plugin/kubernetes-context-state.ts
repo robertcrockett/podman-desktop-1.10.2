@@ -19,6 +19,7 @@
 import type { IncomingMessage } from 'node:http';
 
 import type {
+  Context,
   Informer,
   KubernetesListObject,
   KubernetesObject,
@@ -28,7 +29,11 @@ import type {
   V1DeploymentList,
   V1Ingress,
   V1IngressList,
+  V1Node,
+  V1NodeList,
   V1ObjectMeta,
+  V1PersistentVolumeClaim,
+  V1PersistentVolumeClaimList,
   V1Pod,
   V1PodList,
   V1Service,
@@ -43,8 +48,9 @@ import {
   NetworkingV1Api,
 } from '@kubernetes/client-node';
 
+import type { V1Route } from '/@api/openshift-types.js';
+
 import type { ApiSenderType } from './api.js';
-import type { V1Route } from './api/openshift-types.js';
 import type { KubeContext } from './kubernetes-context.js';
 import {
   backoffInitialValue,
@@ -54,12 +60,22 @@ import {
   dispatchTimeout,
 } from './kubernetes-context-state-constants.js';
 
+// If the number of contexts in the kubeconfig file is greater than this number,
+// only the connectivity to the current context will be checked
+const MAX_NON_CURRENT_CONTEXTS_TO_CHECK = 10;
+
 // ContextInternalState stores informers for a kube context
 type ContextInternalState = Map<ResourceName, Informer<KubernetesObject> & ObjectCache<KubernetesObject>>;
+
+// CheckingState indicates the state of the check for a context
+export interface CheckingState {
+  state: 'waiting' | 'checking' | 'gaveup';
+}
 
 // ContextState stores information for the user about a kube context: is the cluster reachable, the number
 // of instances of different resources
 interface ContextState {
+  checking: CheckingState;
   error?: string;
   reachable: boolean;
   resources: ContextStateResources;
@@ -70,7 +86,7 @@ const selectedResources = ['pods', 'deployments'] as const;
 
 // resources managed by podman desktop, excepted the primary ones
 // This is where to add new resources when adding new informers
-const secondaryResources = ['services', 'ingresses', 'routes'] as const;
+const secondaryResources = ['services', 'ingresses', 'routes', 'nodes', 'persistentvolumeclaims'] as const;
 
 export type SelectedResourceName = (typeof selectedResources)[number];
 export type SecondaryResourceName = (typeof secondaryResources)[number];
@@ -86,6 +102,7 @@ export type ContextStateResources = {
 
 // information sent: status and count of selected resources
 export interface ContextGeneralState {
+  checking?: CheckingState;
   error?: string;
   reachable: boolean;
   resources: SelectedResourcesCount;
@@ -126,12 +143,16 @@ const dispatchAllResources: ResourcesDispatchOptions = {
   pods: true,
   deployments: true,
   services: true,
+  nodes: true,
+  persistentvolumeclaims: true,
   ingresses: true,
   routes: true,
   // add new resources here when adding new informers
 };
 
 interface DispatchOptions {
+  // do we send information about contexts connectivity checking?
+  checkingState: boolean;
   // do we send general context for all contexts?
   contextsGeneralState: boolean;
   // do we send general context for current context?
@@ -216,6 +237,14 @@ export class ContextsStates {
     return result;
   }
 
+  getContextsCheckingState(): Map<string, CheckingState> {
+    const result = new Map<string, CheckingState>();
+    this.state.forEach((val, key) => {
+      result.set(key, val.checking);
+    });
+    return result;
+  }
+
   getCurrentContextGeneralState(current: string): ContextGeneralState {
     if (current) {
       const state = this.state.get(current);
@@ -256,11 +285,14 @@ export class ContextsStates {
   safeSetState(name: string, update: (previous: ContextState) => void): void {
     if (!this.state.has(name)) {
       this.state.set(name, {
+        checking: { state: 'waiting' },
         error: undefined,
         reachable: false,
         resources: {
           pods: [],
           deployments: [],
+          nodes: [],
+          persistentvolumeclaims: [],
           services: [],
           ingresses: [],
           routes: [],
@@ -336,7 +368,7 @@ class SecondaryResourceWatchersRegistry {
 export class ContextsManager {
   private kubeConfig = new KubeConfig();
   private states = new ContextsStates();
-  private currentContext: string | undefined;
+  private currentContext: KubeContext | undefined;
   private secondaryWatchers = new SecondaryResourceWatchersRegistry();
 
   private dispatchContextsGeneralStateTimer: NodeJS.Timeout | undefined;
@@ -359,53 +391,121 @@ export class ContextsManager {
     this.connectionDelayTimers.set(resourceName, connectionDelay);
   }
 
-  // update is the reconcile function, it gets as input the last known kube config
-  // and starts/stops informers for different kube contexts, depending on these inputs
+  isContextInKubeconfig(context: KubeContext): boolean {
+    // if there is no cluster on the kubeconfig with
+    // the value of context.cluster -> false
+    const cluster = this.kubeConfig.getCluster(context.cluster);
+    if (!cluster || cluster.server !== context.clusterInfo?.server) {
+      return false;
+    }
+
+    // if there is no user on the kubeconfig with the value of context.user -> false
+    const user = this.kubeConfig.getUser(context.user);
+    if (!user) {
+      return false;
+    }
+
+    // if there is no context on the kubeconfig with the value of context.context -> false
+    const contextObj = this.kubeConfig.getContextObject(context.name);
+    /* eslint-disable-next-line no-null/no-null */
+    return contextObj !== null && contextObj.cluster === context.cluster && contextObj.user === context.user;
+  }
+
+  isContextChanged(kubeconfig: KubeConfig): boolean {
+    // if the current context name in the kubeconfig is different from the latest context we saved -> true
+    if (kubeconfig.currentContext !== this.currentContext?.name) {
+      return true;
+    }
+
+    // by retrieving the context from the kubeconfig, if the user is different from the latest context we saved -> true
+    const user = kubeconfig.getCurrentUser();
+    if (user?.name !== this.currentContext?.user) {
+      return true;
+    }
+
+    const ns = kubeconfig.getContexts()?.find(c => c.name === kubeconfig.currentContext)?.namespace;
+    if (ns !== this.currentContext.namespace) {
+      return true;
+    }
+
+    // by retrieving the cluster from the kubeconfig, if the name or server url are different from the latest context we saved -> true
+    const cluster = kubeconfig.getCurrentCluster();
+    return (
+      cluster?.name !== this.currentContext?.cluster || cluster?.server !== this.currentContext?.clusterInfo?.server
+    );
+  }
+
   async update(kubeconfig: KubeConfig): Promise<void> {
+    const checkOnlyCurrentContext = kubeconfig.contexts.length > MAX_NON_CURRENT_CONTEXTS_TO_CHECK;
+
     this.kubeConfig = kubeconfig;
     let contextChanged = false;
-    if (kubeconfig.currentContext !== this.currentContext) {
+    if (this.isContextChanged(kubeconfig)) {
       contextChanged = true;
-      this.currentContext = kubeconfig.currentContext;
-    }
-    // Add informers for new contexts
-    let added = false;
-    for (const context of this.kubeConfig.contexts) {
-      if (!this.states.hasContext(context.name)) {
-        const informers = this.createKubeContextInformers(context);
-        this.states.setInformers(context.name, informers);
-        added = true;
-      }
+      const currentCluster = kubeconfig.getCurrentCluster();
+      this.currentContext = {
+        name: kubeconfig.currentContext,
+        user: kubeconfig.getCurrentUser()?.name ?? '',
+        cluster: currentCluster?.name ?? '',
+        clusterInfo: {
+          name: currentCluster?.name ?? '',
+          server: currentCluster?.server ?? '',
+        },
+        namespace: kubeconfig.getContexts().find(c => c.name === kubeconfig.currentContext)?.namespace,
+      };
     }
 
     // Delete informers for removed contexts
+    // We also remove the state of the current context if it has changed. It may happen that the name of the context is the same but it is pointing to a different cluster
+    // We also delete informers for non-current contexts wif we are checking only current context
     let removed = false;
     for (const name of this.states.getContextsNames()) {
-      if (!this.kubeConfig.contexts.find(c => c.name === name)) {
+      if (
+        !this.kubeConfig.contexts.find(c => c.name === name) ||
+        (contextChanged && name === this.currentContext?.name) ||
+        (checkOnlyCurrentContext && name !== this.currentContext?.name)
+      ) {
         await this.states.dispose(name);
         removed = true;
       }
     }
 
+    // Add informers for new contexts (only current context if we are checking only it)
+    let added = false;
+    for (const context of this.kubeConfig.contexts) {
+      if (checkOnlyCurrentContext && context.name !== this.currentContext?.name) {
+        continue;
+      }
+      if (!this.states.hasContext(context.name)) {
+        const kubeContext: KubeContext = this.getKubeContext(context);
+        const informers = this.createKubeContextInformers(kubeContext);
+        this.states.setInformers(context.name, informers);
+        added = true;
+      }
+    }
+
     // Delete secondary informers (others than pods/deployments) on non-current contexts
     if (contextChanged) {
-      const nonCurrentContexts = this.kubeConfig.contexts.filter(ctx => ctx.name !== this.currentContext);
+      const nonCurrentContexts = this.kubeConfig.contexts.filter(ctx => ctx.name !== this.currentContext?.name);
       for (const ctx of nonCurrentContexts) {
         const contextName = ctx.name;
         await this.states.disposeSecondaryInformers(contextName);
       }
 
       // Restart informers for secondary resources if watchers are subscribing for this resource
-      for (const resourceName of secondaryResources) {
-        if (this.secondaryWatchers.hasSubscribers(resourceName)) {
-          console.debug(`start watching ${resourceName} in context ${this.currentContext}`);
-          this.startResourceInformer(this.currentContext, resourceName);
+      if (this.currentContext?.name) {
+        for (const resourceName of secondaryResources) {
+          if (this.secondaryWatchers.hasSubscribers(resourceName)) {
+            console.debug(`start watching ${resourceName} in context ${this.currentContext}`);
+            this.startResourceInformer(this.currentContext.name, resourceName);
+          }
         }
       }
     }
 
     if (added || removed || contextChanged) {
       this.dispatch({
+        checkingState: false,
         contextsGeneralState: true,
         currentContextGeneralState: true,
         resources: dispatchAllResources,
@@ -442,23 +542,41 @@ export class ContextsManager {
     if (!context) {
       throw new Error(`context ${contextName} not found`);
     }
+    const kubeContext: KubeContext = this.getKubeContext(context);
     const ns = context.namespace ?? 'default';
     let informer: Informer<KubernetesObject> & ObjectCache<KubernetesObject>;
     switch (resourceName) {
       case 'services':
-        informer = this.createServiceInformer(this.kubeConfig, ns, context);
+        informer = this.createServiceInformer(this.kubeConfig, ns, kubeContext);
+        break;
+      case 'nodes':
+        informer = this.createNodeInformer(this.kubeConfig, ns, kubeContext);
+        break;
+      case 'persistentvolumeclaims':
+        informer = this.createPersistentVolumeClaimInformer(this.kubeConfig, ns, context);
         break;
       case 'ingresses':
-        informer = this.createIngressInformer(this.kubeConfig, ns, context);
+        informer = this.createIngressInformer(this.kubeConfig, ns, kubeContext);
         break;
       case 'routes':
-        informer = this.createRouteInformer(this.kubeConfig, ns, context);
+        informer = this.createRouteInformer(this.kubeConfig, ns, kubeContext);
         break;
       default:
         console.debug(`unable to watch ${resourceName} in context ${contextName}, as this resource is not supported`);
         return;
     }
     this.states.setResourceInformer(contextName, resourceName, informer);
+  }
+
+  private getKubeContext(context: Context): KubeContext {
+    const clusterObj = this.kubeConfig.getCluster(context.cluster);
+    return {
+      ...context,
+      clusterInfo: {
+        name: clusterObj?.name ?? '',
+        server: clusterObj?.server ?? '',
+      },
+    };
   }
 
   private createPodInformer(kc: KubeConfig, ns: string, context: KubeContext): Informer<V1Pod> & ObjectCache<V1Pod> {
@@ -468,16 +586,22 @@ export class ContextsManager {
     let timer: NodeJS.Timeout | undefined;
     let connectionDelay: NodeJS.Timeout | undefined;
     this.setConnectionTimers('pods', timer, connectionDelay);
+
+    this.setStateAndDispatch(context.name, true, false, {}, state => {
+      state.checking = { state: 'checking' };
+    });
+
     return this.createInformer<V1Pod>(kc, context, path, listFn, {
+      checkReachable: true,
       resource: 'pods',
       timer: timer,
       backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
       connectionDelay: connectionDelay,
       onAdd: obj => {
-        this.setStateAndDispatch(context.name, true, { pods: true }, state => state.resources.pods.push(obj));
+        this.setStateAndDispatch(context.name, false, true, { pods: true }, state => state.resources.pods.push(obj));
       },
       onUpdate: obj => {
-        this.setStateAndDispatch(context.name, true, { pods: true }, state => {
+        this.setStateAndDispatch(context.name, false, true, { pods: true }, state => {
           state.resources.pods = state.resources.pods.filter(o => o.metadata?.uid !== obj.metadata?.uid);
           state.resources.pods.push(obj);
         });
@@ -485,19 +609,24 @@ export class ContextsManager {
       onDelete: obj => {
         this.setStateAndDispatch(
           context.name,
+          false,
           true,
           { pods: true },
           state => (state.resources.pods = state.resources.pods.filter(d => d.metadata?.uid !== obj.metadata?.uid)),
         );
       },
       onReachable: reachable => {
-        this.setStateAndDispatch(context.name, true, dispatchAllResources, state => {
+        this.setStateAndDispatch(context.name, true, true, dispatchAllResources, state => {
+          state.checking = { state: 'waiting' };
           state.reachable = reachable;
           state.error = reachable ? undefined : state.error; // if reachable we remove error
         });
       },
       onConnectionError: error => {
-        this.setStateAndDispatch(context.name, true, dispatchAllResources, state => (state.error = error));
+        this.setStateAndDispatch(context.name, true, true, dispatchAllResources, state => {
+          state.checking = { state: 'waiting' };
+          state.error = error;
+        });
       },
     });
   }
@@ -522,12 +651,12 @@ export class ContextsManager {
       backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
       connectionDelay: connectionDelay,
       onAdd: obj => {
-        this.setStateAndDispatch(context.name, true, { deployments: true }, state =>
+        this.setStateAndDispatch(context.name, false, true, { deployments: true }, state =>
           state.resources.deployments.push(obj),
         );
       },
       onUpdate: obj => {
-        this.setStateAndDispatch(context.name, true, { deployments: true }, state => {
+        this.setStateAndDispatch(context.name, false, true, { deployments: true }, state => {
           state.resources.deployments = state.resources.deployments.filter(o => o.metadata?.uid !== obj.metadata?.uid);
           state.resources.deployments.push(obj);
         });
@@ -535,12 +664,91 @@ export class ContextsManager {
       onDelete: obj => {
         this.setStateAndDispatch(
           context.name,
+          false,
           true,
           { deployments: true },
           state =>
             (state.resources.deployments = state.resources.deployments.filter(
               d => d.metadata?.uid !== obj.metadata?.uid,
             )),
+        );
+      },
+    });
+  }
+
+  public createPersistentVolumeClaimInformer(
+    kc: KubeConfig,
+    ns: string,
+    context: KubeContext,
+  ): Informer<V1PersistentVolumeClaim> & ObjectCache<V1PersistentVolumeClaim> {
+    const k8sApi = kc.makeApiClient(CoreV1Api);
+    const listFn = (): Promise<{ response: IncomingMessage; body: V1PersistentVolumeClaimList }> =>
+      k8sApi.listNamespacedPersistentVolumeClaim(ns);
+    const path = `/api/v1/namespaces/${ns}/persistentvolumeclaims`;
+    let timer: NodeJS.Timeout | undefined;
+    let connectionDelay: NodeJS.Timeout | undefined;
+    this.setConnectionTimers('persistentvolumeclaims', timer, connectionDelay);
+    return this.createInformer<V1PersistentVolumeClaim>(kc, context, path, listFn, {
+      resource: 'persistentvolumeclaims',
+      timer: timer,
+      backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
+      connectionDelay: connectionDelay,
+      onAdd: obj => {
+        this.setStateAndDispatch(context.name, false, false, { persistentvolumeclaims: true }, state =>
+          state.resources.persistentvolumeclaims.push(obj),
+        );
+      },
+      onUpdate: obj => {
+        this.setStateAndDispatch(context.name, false, false, { persistentvolumeclaims: true }, state => {
+          state.resources.persistentvolumeclaims = state.resources.persistentvolumeclaims.filter(
+            o => o.metadata?.uid !== obj.metadata?.uid,
+          );
+          state.resources.persistentvolumeclaims.push(obj);
+        });
+      },
+      onDelete: obj => {
+        this.setStateAndDispatch(
+          context.name,
+          false,
+          false,
+          { persistentvolumeclaims: true },
+          state =>
+            (state.resources.persistentvolumeclaims = state.resources.persistentvolumeclaims.filter(
+              d => d.metadata?.uid !== obj.metadata?.uid,
+            )),
+        );
+      },
+    });
+  }
+
+  public createNodeInformer(kc: KubeConfig, ns: string, context: KubeContext): Informer<V1Node> & ObjectCache<V1Node> {
+    const k8sApi = kc.makeApiClient(CoreV1Api);
+    const listFn = (): Promise<{ response: IncomingMessage; body: V1NodeList }> => k8sApi.listNode();
+    const path = '/api/v1/nodes';
+    let timer: NodeJS.Timeout | undefined;
+    let connectionDelay: NodeJS.Timeout | undefined;
+    this.setConnectionTimers('nodes', timer, connectionDelay);
+    return this.createInformer<V1Node>(kc, context, path, listFn, {
+      resource: 'nodes',
+      timer: timer,
+      backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
+      connectionDelay: connectionDelay,
+      onAdd: obj => {
+        this.setStateAndDispatch(context.name, false, false, { nodes: true }, state => state.resources.nodes.push(obj));
+      },
+      onUpdate: obj => {
+        this.setStateAndDispatch(context.name, false, false, { nodes: true }, state => {
+          state.resources.nodes = state.resources.nodes.filter(o => o.metadata?.uid !== obj.metadata?.uid);
+          state.resources.nodes.push(obj);
+        });
+      },
+      onDelete: obj => {
+        this.setStateAndDispatch(
+          context.name,
+          false,
+          false,
+          { nodes: true },
+          state => (state.resources.nodes = state.resources.nodes.filter(d => d.metadata?.uid !== obj.metadata?.uid)),
         );
       },
     });
@@ -566,10 +774,12 @@ export class ContextsManager {
       backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
       connectionDelay: connectionDelay,
       onAdd: obj => {
-        this.setStateAndDispatch(context.name, false, { services: true }, state => state.resources.services.push(obj));
+        this.setStateAndDispatch(context.name, false, false, { services: true }, state =>
+          state.resources.services.push(obj),
+        );
       },
       onUpdate: obj => {
-        this.setStateAndDispatch(context.name, false, { services: true }, state => {
+        this.setStateAndDispatch(context.name, false, false, { services: true }, state => {
           state.resources.services = state.resources.services.filter(o => o.metadata?.uid !== obj.metadata?.uid);
           state.resources.services.push(obj);
         });
@@ -577,6 +787,7 @@ export class ContextsManager {
       onDelete: obj => {
         this.setStateAndDispatch(
           context.name,
+          false,
           false,
           { services: true },
           state =>
@@ -606,12 +817,12 @@ export class ContextsManager {
       backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
       connectionDelay: connectionDelay,
       onAdd: obj => {
-        this.setStateAndDispatch(context.name, false, { ingresses: true }, state =>
+        this.setStateAndDispatch(context.name, false, false, { ingresses: true }, state =>
           state.resources.ingresses.push(obj),
         );
       },
       onUpdate: obj => {
-        this.setStateAndDispatch(context.name, false, { ingresses: true }, state => {
+        this.setStateAndDispatch(context.name, false, false, { ingresses: true }, state => {
           state.resources.ingresses = state.resources.ingresses.filter(o => o.metadata?.uid !== obj.metadata?.uid);
           state.resources.ingresses.push(obj);
         });
@@ -619,6 +830,7 @@ export class ContextsManager {
       onDelete: obj => {
         this.setStateAndDispatch(
           context.name,
+          false,
           false,
           { ingresses: true },
           state =>
@@ -652,10 +864,12 @@ export class ContextsManager {
       backoff: new Backoff(backoffInitialValue, backoffLimit, backoffJitter),
       connectionDelay: connectionDelay,
       onAdd: obj => {
-        this.setStateAndDispatch(context.name, false, { routes: true }, state => state.resources.routes.push(obj));
+        this.setStateAndDispatch(context.name, false, false, { routes: true }, state =>
+          state.resources.routes.push(obj),
+        );
       },
       onUpdate: obj => {
-        this.setStateAndDispatch(context.name, false, { routes: true }, state => {
+        this.setStateAndDispatch(context.name, false, false, { routes: true }, state => {
           state.resources.routes = state.resources.routes.filter(
             o => o.metadata?.uid !== (obj.metadata as V1ObjectMeta)?.uid,
           );
@@ -665,6 +879,7 @@ export class ContextsManager {
       onDelete: obj => {
         this.setStateAndDispatch(
           context.name,
+          false,
           false,
           { routes: true },
           state =>
@@ -772,6 +987,11 @@ export class ContextsManager {
     context: KubeContext,
     options: CreateInformerOptions<T>,
   ): void {
+    if (options.checkReachable) {
+      this.setStateAndDispatch(context.name, true, false, {}, state => {
+        state.checking = { state: 'checking' };
+      });
+    }
     informer.start().catch((err: unknown) => {
       const nextTimeout = options.backoff.get();
       if (err !== undefined) {
@@ -787,19 +1007,29 @@ export class ContextsManager {
         return;
       }
       options.timer = setTimeout(() => {
-        this.restartInformer<T>(informer, context, options);
+        // before restarting the failed informer we should check if the context is still present in the kubeconfig.
+        // It is possible that if we start an informer on an old cluster it will keep failing without any chance to be stopped.
+        // That happens bc, in the library, when executing the listFn
+        // it throws here (as the cluster is not reachable) https://github.com/kubernetes-client/javascript/blob/b8b0ec522bf42086f7c2e1b8648b478b3f584fa8/src/cache.ts#L161
+        // so the watch request is not initialized -> https://github.com/kubernetes-client/javascript/blob/b8b0ec522bf42086f7c2e1b8648b478b3f584fa8/src/cache.ts#L181
+        // and then the stop action cannot be executed -> https://github.com/kubernetes-client/javascript/blob/b8b0ec522bf42086f7c2e1b8648b478b3f584fa8/src/cache.ts#L134
+        if (this.isContextInKubeconfig(context)) {
+          this.restartInformer<T>(informer, context, options);
+        }
       }, nextTimeout);
     });
   }
 
   private setStateAndDispatch(
     name: string,
+    checkingState: boolean,
     sendGeneral: boolean,
     options: ResourcesDispatchOptions,
     update: (previous: ContextState) => void,
   ): void {
     this.states.safeSetState(name, update);
     this.dispatch({
+      checkingState,
       contextsGeneralState: sendGeneral,
       currentContextGeneralState: sendGeneral,
       resources: options,
@@ -807,41 +1037,65 @@ export class ContextsManager {
   }
 
   private dispatch(options: DispatchOptions): void {
+    if (options.checkingState) {
+      this.dispatchCheckingState(this.states.getContextsCheckingState());
+    }
     if (options.contextsGeneralState) {
-      this.dispatchContextsGeneralStateTimer = this.dispatchDebounce(
-        `kubernetes-contexts-general-state-update`,
-        this.states.getContextsGeneralState(),
-        this.dispatchContextsGeneralStateTimer,
-        dispatchTimeout,
-      );
+      this.dispatchGeneralState(this.states.getContextsGeneralState());
     }
     if (options.currentContextGeneralState) {
-      this.dispatchCurrentContextGeneralStateTimer = this.dispatchDebounce(
-        `kubernetes-current-context-general-state-update`,
+      this.dispatchCurrentContextGeneralState(
         this.states.getCurrentContextGeneralState(this.kubeConfig.currentContext),
-        this.dispatchCurrentContextGeneralStateTimer,
-        dispatchTimeout,
       );
     }
     Object.keys(options.resources).forEach(res => {
       const resname = res as ResourceName;
       if (options.resources[resname]) {
-        this.dispatchCurrentContextResourceTimers.set(
+        this.dispatchCurrentContextResource(
           resname,
-          this.dispatchDebounce(
-            `kubernetes-current-context-${resname}-update`,
-            this.states.getContextResources(this.kubeConfig.currentContext, resname),
-            this.dispatchCurrentContextResourceTimers.get(resname),
-            dispatchTimeout,
-          ),
+          this.states.getContextResources(this.kubeConfig.currentContext, resname),
         );
       }
     });
   }
 
+  public dispatchCheckingState(val: Map<string, CheckingState>): void {
+    this.apiSender.send(`kubernetes-contexts-checking-state-update`, val);
+  }
+
+  public dispatchGeneralState(val: Map<string, ContextGeneralState>): void {
+    this.dispatchContextsGeneralStateTimer = this.dispatchDebounce(
+      `kubernetes-contexts-general-state-update`,
+      val,
+      this.dispatchContextsGeneralStateTimer,
+      dispatchTimeout,
+    );
+  }
+
+  public dispatchCurrentContextGeneralState(val: ContextGeneralState): void {
+    this.dispatchCurrentContextGeneralStateTimer = this.dispatchDebounce(
+      `kubernetes-current-context-general-state-update`,
+      val,
+      this.dispatchCurrentContextGeneralStateTimer,
+      dispatchTimeout,
+    );
+  }
+
+  public dispatchCurrentContextResource(resname: ResourceName, val: KubernetesObject[]): void {
+    this.dispatchCurrentContextResourceTimers.set(
+      resname,
+      this.dispatchDebounce(
+        `kubernetes-current-context-${resname}-update`,
+        val,
+        this.dispatchCurrentContextResourceTimers.get(resname),
+        dispatchTimeout,
+      ),
+    );
+  }
+
   private dispatchDebounce(
     eventName: string,
-    value: Map<string, ContextGeneralState> | ContextGeneralState | KubernetesObject[],
+    value: Map<string, ContextGeneralState> | ContextGeneralState | KubernetesObject[] | Map<string, boolean>,
     timer: NodeJS.Timeout | undefined,
     timeout: number,
   ): NodeJS.Timeout | undefined {
@@ -866,19 +1120,19 @@ export class ContextsManager {
     if (isSecondaryResourceName(resourceName)) {
       this.secondaryWatchers.subscribe(resourceName);
     }
-    if (!this.currentContext) {
+    if (!this.currentContext?.name) {
       return [];
     }
-    if (this.states.hasInformer(this.currentContext, resourceName)) {
+    if (this.states.hasInformer(this.currentContext.name, resourceName)) {
       console.debug(`already watching ${resourceName} in context ${this.currentContext}`);
       return this.states.getContextResources(this.kubeConfig.currentContext, resourceName);
     }
-    if (!this.states.isReachable(this.currentContext)) {
+    if (!this.states.isReachable(this.currentContext.name)) {
       console.debug(`skip watching ${resourceName} in context ${this.currentContext}, as the context is not reachable`);
       return [];
     }
     console.debug(`start watching ${resourceName} in context ${this.currentContext}`);
-    this.startResourceInformer(this.currentContext, resourceName);
+    this.startResourceInformer(this.currentContext.name, resourceName);
     return [];
   }
 

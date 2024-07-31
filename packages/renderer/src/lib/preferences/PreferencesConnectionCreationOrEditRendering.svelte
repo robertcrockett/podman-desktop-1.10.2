@@ -1,6 +1,7 @@
 <script lang="ts">
 import { faCubes } from '@fortawesome/free-solid-svg-icons';
 import type { AuditRequestItems, AuditResult, ConfigurationScope } from '@podman-desktop/api';
+import { Button, EmptyScreen, ErrorMessage, LinearProgress, Spinner } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 /* eslint-disable import/no-duplicates */
 // https://github.com/import-js/eslint-plugin-import/issues/1479
@@ -12,20 +13,15 @@ import type { ContextUI } from '/@/lib/context/context';
 import { context } from '/@/stores/context';
 /* eslint-enable import/no-duplicates */
 import { operationConnectionsInfo } from '/@/stores/operation-connections';
-
 import type {
   ProviderContainerConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
-} from '../../../../main/src/plugin/api/provider-info';
+} from '/@api/provider-info';
+
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import Markdown from '../markdown/Markdown.svelte';
 import AuditMessageBox from '../ui/AuditMessageBox.svelte';
-import Button from '../ui/Button.svelte';
-import EmptyScreen from '../ui/EmptyScreen.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
-import LinearProgress from '../ui/LinearProgress.svelte';
-import Spinner from '../ui/Spinner.svelte';
 import TerminalWindow from '../ui/TerminalWindow.svelte';
 import EditableConnectionResourceItem from './item-formats/EditableConnectionResourceItem.svelte';
 import {
@@ -66,10 +62,10 @@ let tokenId: number | undefined;
 
 const providerDisplayName =
   (providerInfo.containerProviderConnectionCreation
-    ? providerInfo.containerProviderConnectionCreationDisplayName || undefined
+    ? providerInfo.containerProviderConnectionCreationDisplayName ?? undefined
     : providerInfo.kubernetesProviderConnectionCreation
       ? providerInfo.kubernetesProviderConnectionCreationDisplayName
-      : undefined) || providerInfo.name;
+      : undefined) ?? providerInfo.name;
 
 let osMemory: string;
 let osCpu: string;
@@ -319,7 +315,7 @@ function updateStore() {
         operationInProgress: inProgress,
         operationSuccessful: operationSuccessful,
         operationStarted: operationStarted,
-        errorMessage: errorMessage || '',
+        errorMessage: errorMessage ?? '',
         tokenId,
       });
     }
@@ -488,7 +484,7 @@ function getConnectionResourceConfigurationValue(
         {/if}
 
         <div class="p-3 mt-2 w-4/5 h-fit {inProgress ? 'opacity-40 pointer-events-none' : ''}">
-          {#if connectionAuditResult && (connectionAuditResult.records?.length || 0) > 0}
+          {#if connectionAuditResult && (connectionAuditResult.records?.length ?? 0) > 0}
             <AuditMessageBox auditResult="{connectionAuditResult}" />
           {/if}
           <form

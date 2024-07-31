@@ -38,12 +38,17 @@ import IngressDetails from './lib/ingresses-routes/IngressDetails.svelte';
 import IngressesRoutesList from './lib/ingresses-routes/IngressesRoutesList.svelte';
 import RouteDetails from './lib/ingresses-routes/RouteDetails.svelte';
 import KubePlayYAML from './lib/kube/KubePlayYAML.svelte';
+import ManifestDetails from './lib/manifest/ManifestDetails.svelte';
+import NodeDetails from './lib/node/NodeDetails.svelte';
+import NodesList from './lib/node/NodesList.svelte';
 import Onboarding from './lib/onboarding/Onboarding.svelte';
 import DeployPodToKube from './lib/pod/DeployPodToKube.svelte';
 import PodCreateFromContainers from './lib/pod/PodCreateFromContainers.svelte';
 import PodDetails from './lib/pod/PodDetails.svelte';
 import PodsList from './lib/pod/PodsList.svelte';
 import PreferencesPage from './lib/preferences/PreferencesPage.svelte';
+import PVCDetails from './lib/pvc/PVCDetails.svelte';
+import PVCList from './lib/pvc/PVCList.svelte';
 import ServiceDetails from './lib/service/ServiceDetails.svelte';
 import ServicesList from './lib/service/ServicesList.svelte';
 import StatusBar from './lib/statusbar/StatusBar.svelte';
@@ -99,8 +104,8 @@ window.events?.receive('navigate', (navigationRequest: unknown) => {
 
       <div
         class="flex flex-col w-full h-full overflow-hidden"
-        class:bg-charcoal-700="{!meta.url.startsWith('/preferences')}"
-        class:bg-charcoal-800="{meta.url.startsWith('/preferences')}">
+        class:bg-[var(--pd-content-bg)]="{!meta.url.startsWith('/preferences')}"
+        class:bg-[var(--pd-invert-content-bg)]="{meta.url.startsWith('/preferences')}">
         <TaskManager />
         <SendFeedback />
         <ToastHandler />
@@ -123,6 +128,16 @@ window.events?.receive('navigate', (navigationRequest: unknown) => {
 
         <Route path="/images" breadcrumb="Images" navigationHint="root">
           <ImagesList />
+        </Route>
+        <Route
+          path="/manifests/:id/:engineId/:base64RepoTag/*"
+          breadcrumb="Manifest Details"
+          let:meta
+          navigationHint="details">
+          <ManifestDetails
+            imageID="{meta.params.id}"
+            engineId="{decodeURI(meta.params.engineId)}"
+            base64RepoTag="{meta.params.base64RepoTag}" />
         </Route>
         <Route
           path="/images/:id/:engineId/:base64RepoTag/*"
@@ -188,6 +203,22 @@ window.events?.receive('navigate', (navigationRequest: unknown) => {
         </Route>
         <Route path="/volumes/:name/:engineId/*" breadcrumb="Volume Details" let:meta navigationHint="details">
           <VolumeDetails volumeName="{decodeURI(meta.params.name)}" engineId="{decodeURI(meta.params.engineId)}" />
+        </Route>
+        <Route path="/nodes" breadcrumb="Nodes" navigationHint="root">
+          <NodesList />
+        </Route>
+        <Route path="/nodes/:name/*" breadcrumb="Node Details" let:meta navigationHint="details">
+          <NodeDetails name="{decodeURI(meta.params.name)}" />
+        </Route>
+        <Route path="/persistentvolumeclaims" breadcrumb="Persistent Volume Claims" navigationHint="root">
+          <PVCList />
+        </Route>
+        <Route
+          path="/persistentvolumeclaims/:name/:namespace/*"
+          breadcrumb="Persistent Volume Claim Details"
+          let:meta
+          navigationHint="details">
+          <PVCDetails name="{decodeURI(meta.params.name)}" namespace="{decodeURI(meta.params.namespace)}" />
         </Route>
         <Route path="/deployments" breadcrumb="Deployments" navigationHint="root">
           <DeploymentsList />

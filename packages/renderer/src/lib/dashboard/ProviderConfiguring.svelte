@@ -1,14 +1,15 @@
 <script lang="ts">
 import 'xterm/css/xterm.css';
 
+import { Spinner } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
-import type { CheckStatus, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { CheckStatus, ProviderInfo } from '/@api/provider-info';
+
 import { TerminalSettings } from '../../../../main/src/plugin/terminal-settings';
 import { getPanelDetailColor } from '../color/color';
-import Spinner from '../ui/Spinner.svelte';
 import Steps from '../ui/Steps.svelte';
 import PreflightChecks from './PreflightChecks.svelte';
 import ProviderCard from './ProviderCard.svelte';
@@ -87,11 +88,11 @@ onDestroy(() => {
 
 <ProviderCard provider="{provider}">
   <svelte:fragment slot="content">
-    <div>
+    <div class="flex flex-col w-full lg:w-2/3 justify-center items-center">
       {#if initializationContext.mode === InitializeAndStartMode}
         <Steps steps="{InitializationSteps}" />
       {/if}
-      <div class="flex flex-col text-gray-700 items-center justify-center" aria-label="Transitioning State">
+      <div class="flex flex-col text-gray-700 items-center" aria-label="Transitioning State">
         <div>Initializing</div>
         <div class="my-2">
           <Spinner />
@@ -107,11 +108,11 @@ onDestroy(() => {
       bind:this="{logsXtermDiv}">
     </div>
 
-    {#if provider.updateInfo}
-      <div class="mt-5 mb-1 w-full flex justify-around">
-        <ProviderUpdateButton onPreflightChecks="{checks => (preflightChecks = checks)}" provider="{provider}" />
-      </div>
-    {/if}
     <PreflightChecks preflightChecks="{preflightChecks}" />
+  </svelte:fragment>
+  <svelte:fragment slot="update">
+    {#if provider.updateInfo?.version && provider.version !== provider.updateInfo?.version}
+      <ProviderUpdateButton onPreflightChecks="{checks => (preflightChecks = checks)}" provider="{provider}" />
+    {/if}
   </svelte:fragment>
 </ProviderCard>

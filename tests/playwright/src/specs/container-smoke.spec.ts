@@ -21,6 +21,7 @@ import { expect as playExpect } from '@playwright/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 
 import { ContainerState } from '../model/core/states';
+import type { ContainerInteractiveParams } from '../model/core/types';
 import { ContainersPage } from '../model/pages/containers-page';
 import type { ImagesPage } from '../model/pages/images-page';
 import { WelcomePage } from '../model/pages/welcome-page';
@@ -28,7 +29,7 @@ import { NavigationBar } from '../model/workbench/navigation';
 import { PodmanDesktopRunner } from '../runner/podman-desktop-runner';
 import type { RunnerTestContext } from '../testContext/runner-test-context';
 import { deleteContainer, deleteImage } from '../utility/operations';
-import { waitUntil, waitWhile } from '../utility/wait';
+import { waitForPodmanMachineStartup, waitUntil, waitWhile } from '../utility/wait';
 
 let pdRunner: PodmanDesktopRunner;
 let page: Page;
@@ -36,6 +37,7 @@ const imageToPull = 'ghcr.io/linuxcontainers/alpine';
 const imageTag = 'latest';
 const containerToRun = 'alpine-container';
 const containerList = ['first', 'second', 'third'];
+const containerStartParams: ContainerInteractiveParams = { attachTerminal: false };
 
 beforeAll(async () => {
   pdRunner = new PodmanDesktopRunner();
@@ -43,6 +45,7 @@ beforeAll(async () => {
   pdRunner.setVideoAndTraceName('containers-e2e');
   const welcomePage = new WelcomePage(page);
   await welcomePage.handleWelcomePage(true);
+  await waitForPodmanMachineStartup(page);
   // wait giving a time to podman desktop to load up
   let images: ImagesPage;
   try {
@@ -97,23 +100,23 @@ describe('Verification of container creation workflow', async () => {
 
   test(`Start a container '${containerToRun}'`, async () => {
     const navigationBar = new NavigationBar(page);
-    const images = await navigationBar.openImages();
+    let images = await navigationBar.openImages();
     const imageDetails = await images.openImageDetails(imageToPull);
     const runImage = await imageDetails.openRunImage();
     await pdRunner.screenshot('containers-run-image.png');
-    const containers = await runImage.startContainer(containerToRun);
-    await waitUntil(
-      async () => await containers.containerExists(containerToRun),
-      10000,
-      1000,
-      true,
-      'Failed to start a container',
-    );
+    const containers = await runImage.startContainer(containerToRun, containerStartParams);
+    await playExpect(containers.header).toBeVisible();
+    await playExpect
+      .poll(async () => await containers.containerExists(containerToRun), { timeout: 10000 })
+      .toBeTruthy();
     await pdRunner.screenshot('containers-container-exists.png');
     const containerDetails = await containers.openContainersDetails(containerToRun);
-    await waitUntil(async () => {
-      return (await containerDetails.getState()) === ContainerState.Running;
-    }, 5000);
+    await playExpect
+      .poll(async () => await containerDetails.getState(), { timeout: 10000 })
+      .toContain(ContainerState.Running);
+
+    images = await navigationBar.openImages();
+    playExpect(await images.getCurrentStatusOfImage(imageToPull)).toBe('USED');
   });
 
   test('Open a container details', async () => {
@@ -174,7 +177,7 @@ describe('Verification of container creation workflow', async () => {
 
     for (const container of containerList) {
       const images = await navigationBar.openImages();
-      const containersPage = await images.startContainerWithImage(imageToPull, container);
+      const containersPage = await images.startContainerWithImage(imageToPull, container, containerStartParams);
       await playExpect(containersPage.heading).toBeVisible();
       await playExpect
         .poll(async () => await containersPage.containerExists(container), { timeout: 15000 })

@@ -38,6 +38,8 @@ const pod: PodInfoUI = {
   selected: false,
   containers: [],
   kind: 'podman',
+  node: 'node1',
+  namespace: 'default',
 };
 
 test('Expect simple column styling', async () => {
@@ -46,12 +48,12 @@ test('Expect simple column styling', async () => {
   const text = screen.getByText(pod.name);
   expect(text).toBeInTheDocument();
   expect(text).toHaveClass('text-sm');
-  expect(text).toHaveClass('text-gray-300');
+  expect(text).toHaveClass('text-[var(--pd-table-body-text-highlight)]');
 
   const id = screen.getByText(pod.shortId);
   expect(id).toBeInTheDocument();
   expect(id).toHaveClass('text-xs');
-  expect(id).toHaveClass('text-violet-400');
+  expect(id).toHaveClass('text-[var(--pd-table-body-text-sub-secondary)]');
 });
 
 test('Expect clicking works', async () => {
@@ -66,4 +68,30 @@ test('Expect clicking works', async () => {
   fireEvent.click(text);
 
   expect(routerGotoSpy).toBeCalledWith('/pods/podman/my-pod/podman/');
+});
+
+test('Expect kubernetes pod information', async () => {
+  const fakeKubernetesInfo: PodInfoUI = {
+    id: 'pod-id',
+    shortId: 'short-id',
+    name: 'my-pod',
+    engineId: 'kubernetes',
+    engineName: '',
+    status: '',
+    age: '',
+    created: '',
+    selected: false,
+    containers: [],
+    kind: 'kubernetes',
+    node: 'node1',
+    namespace: 'customnamespace',
+  };
+
+  render(PodColumnName, { object: fakeKubernetesInfo });
+
+  const id = screen.getByText('customnamespace');
+  expect(id).toBeInTheDocument();
+
+  const node = screen.getByText('node1');
+  expect(node).toBeInTheDocument();
 });

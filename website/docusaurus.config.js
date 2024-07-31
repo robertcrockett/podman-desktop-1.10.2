@@ -42,6 +42,10 @@ const config = {
       {
         redirects: [
           {
+            to: '/api',
+            from: '/docs/extensions/api',
+          },
+          {
             to: '/downloads/windows',
             from: '/downloads/Windows',
           },
@@ -298,6 +302,15 @@ const config = {
           {
             to: '/docs/openshift',
             from: '/docs/kubernetes/openshift',
+          },
+          {
+            to: '/docs/extensions/developing',
+            from: [
+              '/docs/extensions/write/',
+              '/docs/extensions/write/onboarding-workflow',
+              '/docs/extensions/write/when-clause-context',
+              '/docs/extensions/write/adding-icons',
+            ],
           },
         ],
       },

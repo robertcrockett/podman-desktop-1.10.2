@@ -1,6 +1,7 @@
 <script lang="ts">
-import type { ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
-import Link from '../ui/Link.svelte';
+import { Link } from '@podman-desktop/ui-svelte';
+
+import type { ProviderInfo } from '/@api/provider-info';
 
 export let provider: ProviderInfo;
 </script>
@@ -9,7 +10,7 @@ export let provider: ProviderInfo;
   <div class="mt-2 flex relative w-full content-stretch items-center flex-row justify-around flex-grow flex-nowrap">
     {#each provider.links as link}
       {#if link.group === undefined}
-        <Link class="text-base" externalRef="{link.url}">
+        <Link class="text-base" on:click="{() => window.openExternal(link.url)}">
           {link.title}
         </Link>
       {/if}

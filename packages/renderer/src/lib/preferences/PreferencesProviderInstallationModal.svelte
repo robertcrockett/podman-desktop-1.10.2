@@ -1,13 +1,11 @@
 <script lang="ts">
 import { faCircleXmark } from '@fortawesome/free-solid-svg-icons';
+import { Button, CloseButton, Modal } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
 
-import CloseButton from '/@/lib/ui/CloseButton.svelte';
+import type { CheckStatus, ProviderInfo } from '/@api/provider-info';
 
-import type { CheckStatus, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
 import ProviderLogo from '../dashboard/ProviderLogo.svelte';
-import Modal from '../dialogs/Modal.svelte';
-import Button from '../ui/Button.svelte';
 
 export let providerToBeInstalled: { provider: ProviderInfo; displayName: string };
 export let preflightChecks: CheckStatus[];
@@ -23,14 +21,13 @@ function openLink(e: MouseEvent, url: string): void {
 
 {#if providerToBeInstalled}
   <Modal on:close="{() => closeCallback()}">
-    <div
-      class="inline-block w-full overflow-hidden text-left transition-all transform bg-charcoal-600 z-50 rounded-xl shadow-xl shadow-charcoal-900"
-      aria-label="install provider">
-      <div class="flex items-center justify-between px-5 py-4 mb-4">
+    <div class="inline-block w-full overflow-hidden text-left transition-all" aria-label="install provider">
+      <div
+        class="flex items-center justify-between px-5 py-4 mb-4 text-[var(--pd-modal-header-text)] bg-[var(--pd-modal-header-bg)]">
         <h1 class="text-md font-semibold">Create a new {providerToBeInstalled.displayName}</h1>
         <CloseButton class="px-2 py-1" on:click="{() => closeCallback()}" />
       </div>
-      <div class="overflow-y-auto px-4 pb-4">
+      <div class="overflow-y-auto px-4 pb-4 text-[var(--pd-modal-text)]">
         <div class="flex flex-col rounded-lg">
           <div class="mx-auto max-w-[250px] mb-5">
             <ProviderLogo provider="{providerToBeInstalled.provider}" />

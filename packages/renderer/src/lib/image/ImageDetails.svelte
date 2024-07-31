@@ -1,21 +1,23 @@
 <script lang="ts">
 import type { ImageInfo } from '@podman-desktop/api';
+import { Tab } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/motion';
+import { router } from 'tinro';
 
 import { containersInfos } from '/@/stores/containers';
 import { context } from '/@/stores/context';
 import { imageCheckerProviders } from '/@/stores/image-checker-providers';
 import { viewsContributions } from '/@/stores/views';
+import type { ViewInfoUI } from '/@api/view-info';
 
-import type { ViewInfoUI } from '../../../../main/src/plugin/api/view-info';
 import Route from '../../Route.svelte';
 import { imagesInfos } from '../../stores/images';
 import type { ContextUI } from '../context/context';
 import StatusIcon from '../images/StatusIcon.svelte';
 import Badge from '../ui/Badge.svelte';
 import DetailsPage from '../ui/DetailsPage.svelte';
-import Tab from '../ui/Tab.svelte';
+import { getTabUrl, isTabSelected } from '../ui/Util';
 import {
   IMAGE_DETAILS_VIEW_BADGES,
   IMAGE_DETAILS_VIEW_ICONS,
@@ -142,11 +144,20 @@ onDestroy(() => {
       groupContributions="{true}"
       on:update="{() => (image = image)}" />
     <svelte:fragment slot="tabs">
-      <Tab title="Summary" url="summary" />
-      <Tab title="History" url="history" />
-      <Tab title="Inspect" url="inspect" />
+      <Tab
+        title="Summary"
+        selected="{isTabSelected($router.path, 'summary')}"
+        url="{getTabUrl($router.path, 'summary')}" />
+      <Tab
+        title="History"
+        selected="{isTabSelected($router.path, 'history')}"
+        url="{getTabUrl($router.path, 'history')}" />
+      <Tab
+        title="Inspect"
+        selected="{isTabSelected($router.path, 'inspect')}"
+        url="{getTabUrl($router.path, 'inspect')}" />
       {#if showCheckTab}
-        <Tab title="Check" url="check" />
+        <Tab title="Check" selected="{isTabSelected($router.path, 'check')}" url="{getTabUrl($router.path, 'check')}" />
       {/if}
     </svelte:fragment>
     <svelte:fragment slot="content">

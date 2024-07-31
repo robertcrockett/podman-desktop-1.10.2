@@ -29,6 +29,7 @@ import { NavigationBar } from '../model/workbench/navigation';
 import { PodmanDesktopRunner } from '../runner/podman-desktop-runner';
 import type { RunnerTestContext } from '../testContext/runner-test-context';
 import { handleConfirmationDialog } from '../utility/operations';
+import { waitForPodmanMachineStartup } from '../utility/wait';
 
 let pdRunner: PodmanDesktopRunner;
 let page: Page;
@@ -43,7 +44,8 @@ beforeAll(async () => {
 
   const welcomePage = new WelcomePage(page);
   await welcomePage.handleWelcomePage(true);
-  navBar = new NavigationBar(page); // always present on the left side of the page
+  await waitForPodmanMachineStartup(page);
+  navBar = new NavigationBar(page);
 });
 
 afterAll(async () => {
@@ -71,7 +73,8 @@ describe('Image workflow verification', async () => {
     const updatedImages = await pullImagePage.pullImage(helloContainer);
 
     const exists = await updatedImages.waitForImageExists(helloContainer);
-    expect(exists, `${helloContainer} image not present in the list of images`).toBeTruthy();
+    playExpect(exists, `${helloContainer} image not present in the list of images`).toBeTruthy();
+    playExpect(await updatedImages.getCurrentStatusOfImage(helloContainer)).toBe('UNUSED');
   });
 
   test('Check image details', async () => {

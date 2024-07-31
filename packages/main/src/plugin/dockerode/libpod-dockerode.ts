@@ -20,7 +20,7 @@ import type { ManifestCreateOptions, ManifestInspectInfo } from '@podman-desktop
 import type { VolumeCreateOptions, VolumeCreateResponse } from 'dockerode';
 import Dockerode from 'dockerode';
 
-import type { ImageInfo, PodmanListImagesOptions } from '../api/image-info.js';
+import type { ImageInfo, PodmanListImagesOptions } from '/@api/image-info.js';
 
 export interface PodContainerInfo {
   Id: string;
@@ -85,9 +85,16 @@ export interface PodCreatePortOptions {
 }
 
 export interface PodCreateOptions {
-  name: string;
+  name?: string;
   portmappings?: PodCreatePortOptions[];
   labels?: { [key: string]: string };
+  Networks?: {
+    [key: string]: {
+      aliases?: string[];
+      interface_name?: string;
+    };
+  };
+  exit_policy?: string;
 }
 
 export interface ContainerCreateMountOption {
@@ -690,7 +697,7 @@ export class LibpodDockerode {
           404: 'no such pod',
           500: 'server error',
         },
-        options: options || {},
+        options: options ?? {},
       };
 
       return new Promise((resolve, reject) => {

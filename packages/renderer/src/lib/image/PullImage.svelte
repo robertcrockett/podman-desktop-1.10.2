@@ -1,14 +1,14 @@
 <script lang="ts">
 import { faArrowCircleDown, faCog } from '@fortawesome/free-solid-svg-icons';
+import { Button, ErrorMessage } from '@podman-desktop/ui-svelte';
 import { onMount, tick } from 'svelte';
 import { router } from 'tinro';
 import type { Terminal } from 'xterm';
 
-import type { ProviderContainerConnectionInfo } from '../../../../main/src/plugin/api/provider-info';
-import type { PullEvent } from '../../../../main/src/plugin/api/pull-event';
+import type { ProviderContainerConnectionInfo } from '/@api/provider-info';
+import type { PullEvent } from '/@api/pull-event';
+
 import { providerInfos } from '../../stores/providers';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
 import TerminalWindow from '../ui/TerminalWindow.svelte';
 import NoContainerEngineEmptyScreen from './NoContainerEngineEmptyScreen.svelte';
@@ -144,7 +144,7 @@ function requestFocus(element: HTMLInputElement) {
     <Button on:click="{() => gotoManageRegistries()}" icon="{faCog}">Manage registries</Button>
   </svelte:fragment>
 
-  <div slot="content" class="p-5 min-w-full h-full">
+  <div slot="content" class="px-5 pb-5 min-w-full h-full">
     {#if providerConnections.length === 0}
       <NoContainerEngineEmptyScreen />
     {:else}

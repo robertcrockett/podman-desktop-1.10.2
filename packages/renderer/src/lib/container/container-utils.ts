@@ -17,15 +17,16 @@
  ***********************************************************************/
 
 import type { Port } from '@podman-desktop/api';
+import { ContainerIcon } from '@podman-desktop/ui-svelte/icons';
 import { filesize } from 'filesize';
 import humanizeDuration from 'humanize-duration';
 import moment from 'moment';
 
-import type { ContainerInfo } from '../../../../main/src/plugin/api/container-info';
-import { isViewContributionIcon, type ViewInfoUI } from '../../../../main/src/plugin/api/view-info';
+import type { ContainerInfo } from '/@api/container-info';
+import { isViewContributionIcon, type ViewInfoUI } from '/@api/view-info';
+
 import type { ContextUI } from '../context/context';
 import { ContextKeyExpr } from '../context/contextKey';
-import ContainerIcon from '../images/ContainerIcon.svelte';
 import type { ContainerGroupInfoUI, ContainerGroupPartInfoUI, ContainerInfoUI } from './ContainerInfoUI';
 import { ContainerGroupInfoTypeUI } from './ContainerInfoUI';
 
@@ -46,7 +47,7 @@ export class ContainerUtils {
   }
 
   getState(containerInfo: ContainerInfo): string {
-    return (containerInfo.State || '').toUpperCase();
+    return (containerInfo.State ?? '').toUpperCase();
   }
 
   getUptime(containerInfo: ContainerInfo): string {
@@ -65,12 +66,11 @@ export class ContainerUtils {
     return humanizeDuration(uptimeInMs, { round: true, largest: 1 });
   }
 
-  refreshUptime(containerInfoUI: ContainerInfoUI): string {
+  getUpDate(containerInfoUI: ContainerInfoUI): Date | undefined {
     if (containerInfoUI.state !== 'RUNNING' || !containerInfoUI.startedAt) {
-      return '';
+      return undefined;
     }
-    // make it human friendly
-    return this.humanizeUptime(containerInfoUI.startedAt);
+    return moment(containerInfoUI.startedAt).toDate();
   }
 
   getImage(containerInfo: ContainerInfo): string {
@@ -155,7 +155,7 @@ export class ContainerUtils {
       selected: false,
       created: containerInfo.Created,
       labels: containerInfo.Labels,
-      icon: this.iconClass(containerInfo, context, viewContributions) || ContainerIcon,
+      icon: this.iconClass(containerInfo, context, viewContributions) ?? ContainerIcon,
       imageBase64RepoTag: containerInfo.ImageBase64RepoTag,
       imageHref: `/images/${containerInfo.ImageID.startsWith('sha256:') ? containerInfo.ImageID.slice(7) : containerInfo.ImageID}/${containerInfo.engineId}/${containerInfo.ImageBase64RepoTag}/summary`,
     };
@@ -180,7 +180,7 @@ export class ContainerUtils {
         name: podInfo.name,
         type: ContainerGroupInfoTypeUI.POD,
         id: podInfo.id,
-        status: (podInfo.status || '').toUpperCase(),
+        status: (podInfo.status ?? '').toUpperCase(),
         engineId: containerInfo.engineId,
         engineType: containerInfo.engineType,
       };
@@ -190,7 +190,7 @@ export class ContainerUtils {
     return {
       name: this.getName(containerInfo),
       type: ContainerGroupInfoTypeUI.STANDALONE,
-      status: (containerInfo.Status || '').toUpperCase(),
+      status: (containerInfo.Status ?? '').toUpperCase(),
       engineType: containerInfo.engineType,
     };
   }
@@ -331,5 +331,13 @@ export class ContainerUtils {
       .split(' ')
       .filter(part => !part.startsWith('is:'))
       .join(' ');
+  }
+
+  isContainerGroupInfoUI(object: ContainerInfoUI | ContainerGroupInfoUI): object is ContainerGroupInfoUI {
+    return 'type' in object && typeof object.type === 'string';
+  }
+
+  isContainerInfoUI(object: ContainerInfoUI | ContainerGroupInfoUI): object is ContainerInfoUI {
+    return 'state' in object && typeof object.state === 'string';
   }
 }

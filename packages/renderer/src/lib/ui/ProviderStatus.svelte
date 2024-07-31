@@ -12,7 +12,7 @@ interface connectionStatusStyle {
   | 'configured'
   | 'unknown';*/
 const roundIconStyle = 'my-auto w-3 h-3 rounded-full';
-const labelStyle = 'my-auto ml-1 text-sm';
+const labelStyle = 'my-auto ml-1 text-xs';
 const statusesStyle = new Map<string, connectionStatusStyle>([
   [
     'ready',
@@ -79,7 +79,7 @@ const statusesStyle = new Map<string, connectionStatusStyle>([
     },
   ],
 ]);
-$: statusStyle = statusesStyle.get(status) || {
+$: statusStyle = statusesStyle.get(status) ?? {
   bgColor: 'bg-gray-900',
   txtColor: 'text-gray-900',
   label: status.toUpperCase(),

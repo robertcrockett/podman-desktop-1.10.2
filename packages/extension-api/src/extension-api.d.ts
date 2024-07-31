@@ -16,6 +16,25 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+/**
+ * The Podman Desktop API provides a way to interact with Podman Desktop.
+ *
+ * This file `extension-api.d.ts` is automatically generated from typedoc comments
+ * in the source code and provided [on our website](https://podman-desktop.io/api).
+ *
+ * For more information, see the main
+ * [Podman Desktop developing extensions documentation](https://podman-desktop.io/docs/extensions/developing).
+ *
+ * @example
+ * ```typescript
+ * import * as api from '@podman-desktop/api';
+ *
+ * console.log(api.version);
+ * ```
+ *
+ * @module @podman-desktop/api
+ **/
+
 declare module '@podman-desktop/api' {
   /**
    * The version of Podman Desktop.
@@ -152,6 +171,82 @@ declare module '@podman-desktop/api' {
   }
 
   /**
+   * Represents an extension.
+   *
+   * To get an instance of an `Extension` use {@link extensions.getExtension getExtension}.
+   */
+  export interface Extension<T> {
+    /**
+     * The canonical extension identifier in the form of: `publisher.name`.
+     */
+    readonly id: string;
+
+    /**
+     * The uri of the directory containing the extension.
+     */
+    readonly extensionUri: Uri;
+
+    /**
+     * The absolute file path of the directory containing this extension. Shorthand
+     * notation for {@link Extension.extensionUri Extension.extensionUri.fsPath} (independent of the uri scheme).
+     */
+    readonly extensionPath: string;
+
+    /**
+     * The parsed contents of the extension's package.json.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    readonly packageJSON: any;
+
+    /**
+     * The public API exported by this extension (return value of `activate`).
+     * It is an invalid action to access this field before this extension has been activated.
+     */
+    readonly exports: T;
+  }
+
+  /**
+   * Namespace for dealing with installed extensions. Extensions are represented
+   * by an {@link Extension}-interface which enables reflection on them.
+   *
+   * Extension writers can provide APIs to other extensions by returning their API public
+   * surface from the `activate`-call.
+   *
+   * When depending on the API of another extension add an `extensionDependencies`-entry
+   * to `package.json`, and use the {@link extensions.getExtension getExtension}-function
+   * and the {@link Extension.exports exports}-property, like below:
+   *
+   * ```typescript
+   * const podmanExtension = extensions.getExtension('podman-desktop.podman');
+   * const podmanExtensionAPI = podmanExtension.exports;
+   *
+   * podmanExtensionAPI....
+   * ```
+   */
+  export namespace extensions {
+    /**
+     * Get an extension by its full identifier in the form of: `publisher.name`.
+     *
+     * @param extensionId An extension identifier.
+     * @returns An extension or `undefined`.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    export function getExtension<T = any>(extensionId: string): Extension<T> | undefined;
+
+    /**
+     * All extensions currently known to the system.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    export const all: readonly Extension<any>[];
+
+    /**
+     * An event which fires when `extensions.all` changes. This can happen when extensions are
+     * installed, uninstalled, enabled or disabled.
+     */
+    export const onDidChange: Event<void>;
+  }
+
+  /**
    * A provider result represents the values a provider, like the {@linkcode ImageCheckerProvider},
    * may return. For once this is the actual result type `T`, like `ImageChecks`, or a Promise that resolves
    * to that type `T`. In addition, `null` and `undefined` can be returned - either directly or from a
@@ -278,11 +373,44 @@ declare module '@podman-desktop/api' {
   }
 
   export interface PodCreateOptions {
-    name: string;
+    /**
+     * Name is the name of the pod. If not provided, a name will be generated when the pod is created. Optional.
+     */
+    name?: string;
+    /**
+     * PortMappings is a set of ports to map into the infra container.
+     * As, by default, containers share their network with the infra container, this will forward the ports to the entire pod.
+     * Only available if NetNS is set to Bridge, Slirp, or Pasta.
+     */
     portmappings?: PodCreatePortOptions[];
+    /**
+     * Labels are key-value pairs that are used to add metadata to pods. Optional.
+     */
     labels?: { [key: string]: string };
     // Set the provider to use, if not we will try select the first one available (sorted in favor of Podman).
     provider?: ContainerProviderConnection;
+    /**
+     * Map of networks names to ids the container should join to.
+     * You can request additional settings for each network, you can set network aliases,
+     * If the map is empty and the bridge network mode is set the container will be joined to the default network.
+     */
+    Networks?: {
+      [key: string]: {
+        aliases?: string[];
+        interface_name?: string;
+      };
+    };
+    /**
+     * ExitPolicy determines the pod's exit and stop behaviour.
+     * @example
+     * "continue": the pod continues running. This is the default policy
+     * when creating a pod.
+     *
+     * @example
+     * "stop": stop the pod when the last container exits. This is the
+     * default behaviour for play kube.
+     */
+    exit_policy?: string;
   }
 
   export interface ManifestCreateOptions {
@@ -2767,6 +2895,10 @@ declare module '@podman-desktop/api' {
      * a string uniquely identifying the created container, which can be used to execute other methods on the container ({@link containerEngine.deleteContainer}, {@link containerEngine.inspectContainer}, {@link containerEngine.startContainer}, {@link containerEngine.stopContainer}, {@link containerEngine.logsContainer})
      */
     id: string;
+    /**
+     * the engineId where the container is running
+     */
+    engineId: string;
   }
 
   export interface WebviewInfo {

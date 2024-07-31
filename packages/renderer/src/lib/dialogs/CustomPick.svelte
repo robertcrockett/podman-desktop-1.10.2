@@ -1,11 +1,11 @@
 <script lang="ts">
 import { faAngleDown, faAngleUp, faCircleCheck, faXmark } from '@fortawesome/free-solid-svg-icons';
 import type { CustomPickItem } from '@podman-desktop/api';
+import { Button } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import Fa from 'svelte-fa';
 
 import Markdown from '../markdown/Markdown.svelte';
-import Button from '../ui/Button.svelte';
 import type { CustomPickOptions } from './quickpick-input';
 
 let id = -1;
@@ -32,12 +32,12 @@ onMount(() => {
 
 function showCustomPickCallback(customQuickPickParameter: unknown) {
   const options: CustomPickOptions | undefined = customQuickPickParameter as CustomPickOptions;
-  id = options?.id || 0;
-  title = options?.title || '';
-  description = options?.description || '';
-  icon = options?.icon || '';
-  items = options?.items || [];
-  canSelectMany = options?.canSelectMany || false;
+  id = options?.id ?? 0;
+  title = options?.title ?? '';
+  description = options?.description ?? '';
+  icon = options?.icon ?? '';
+  items = options?.items ?? [];
+  canSelectMany = options?.canSelectMany ?? false;
 
   if (items.length > 2 && items.length % 3 !== 1) {
     colsPerRow = 3;
@@ -46,7 +46,7 @@ function showCustomPickCallback(customQuickPickParameter: unknown) {
   usePopperForDetails = items.length > 3;
 
   hideItemSections = usePopperForDetails || options?.hideItemSections || false;
-  minHeight = options?.minHeight || '';
+  minHeight = options?.minHeight ?? '';
 
   items.forEach((_value, index) => {
     itemSectionHiddenStatus.set(index, hideItemSections);

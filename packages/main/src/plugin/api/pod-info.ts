@@ -18,16 +18,19 @@
 
 import type { ContainerProviderConnection, PodCreatePortOptions } from '@podman-desktop/api';
 
+import type { ProviderContainerConnectionInfo } from '/@api/provider-info.js';
+
 import type {
   PodInfo as LibPodPodInfo,
   PodInspectInfo as LibPodPodInspectInfo,
 } from '../dockerode/libpod-dockerode.js';
-import type { ProviderContainerConnectionInfo } from './provider-info.js';
 
 export interface PodInfo extends LibPodPodInfo {
   engineId: string;
   engineName: string;
   kind: 'kubernetes' | 'podman';
+  // Optional information only used by Kubernetes
+  node?: string;
 }
 
 export interface PodInspectInfo extends LibPodPodInspectInfo {
@@ -36,9 +39,16 @@ export interface PodInspectInfo extends LibPodPodInspectInfo {
 }
 
 export interface PodCreateOptions {
-  name: string;
+  name?: string;
   portmappings?: PodCreatePortOptions[];
   labels?: { [key: string]: string };
   // Set the provider to use, if not we will try select the first one available (sorted in favor of Podman).
   provider?: ProviderContainerConnectionInfo | ContainerProviderConnection;
+  Networks?: {
+    [key: string]: {
+      aliases?: string[];
+      interface_name?: string;
+    };
+  };
+  exit_policy?: string;
 }

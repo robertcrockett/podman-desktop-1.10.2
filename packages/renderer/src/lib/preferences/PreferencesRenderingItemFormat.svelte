@@ -1,4 +1,6 @@
 <script lang="ts">
+import { ErrorMessage } from '@podman-desktop/ui-svelte';
+
 import BooleanItem from '/@/lib/preferences/item-formats/BooleanItem.svelte';
 import EnumItem from '/@/lib/preferences/item-formats/EnumItem.svelte';
 import FileItem from '/@/lib/preferences/item-formats/FileItem.svelte';
@@ -8,7 +10,6 @@ import StringItem from '/@/lib/preferences/item-formats/StringItem.svelte';
 
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import Markdown from '../markdown/Markdown.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import { getNormalizedDefaultNumberValue } from './Util';
 
 let invalidText: string | undefined = undefined;
@@ -132,8 +133,8 @@ async function onChange(recordId: string, value: boolean | string | number): Pro
         invalidRecord="{invalidRecord}" />
     {/if}
   {:else if record.type === 'string' && (typeof recordValue === 'string' || recordValue === undefined)}
-    {#if record.format === 'file'}
-      <FileItem record="{record}" value="{recordValue || ''}" onChange="{onChange}" />
+    {#if record.format === 'file' || record.format === 'folder'}
+      <FileItem record="{record}" value="{recordValue ?? ''}" onChange="{onChange}" />
     {:else if record.enum && record.enum.length > 0}
       <EnumItem record="{record}" value="{recordValue}" onChange="{onChange}" />
     {:else}

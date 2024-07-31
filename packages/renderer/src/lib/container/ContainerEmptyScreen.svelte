@@ -1,6 +1,6 @@
 <script lang="ts">
-import ContainerIcon from '../images/ContainerIcon.svelte';
-import EmptyScreen from '../ui/EmptyScreen.svelte';
+import { EmptyScreen } from '@podman-desktop/ui-svelte';
+import { ContainerIcon } from '@podman-desktop/ui-svelte/icons';
 
 export let runningOnly: boolean;
 export let stoppedOnly: boolean;
@@ -34,4 +34,9 @@ function getCommandLine(stoppedOnly: boolean): string {
 }
 </script>
 
-<EmptyScreen icon="{ContainerIcon}" title="{title}" message="{message}" commandline="{commandLine}" />
+<EmptyScreen
+  icon="{ContainerIcon}"
+  title="{title}"
+  message="{message}"
+  commandline="{commandLine}"
+  on:click="{() => window.clipboardWriteText(commandLine)}" />

@@ -7,12 +7,13 @@ import {
   type IconDefinition,
 } from '@fortawesome/free-solid-svg-icons';
 import type { ImageCheck } from '@podman-desktop/api';
+import { Spinner } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
 
-import type { ImageCheckerInfo } from '../../../../main/src/plugin/api/image-checker-info';
+import type { ImageCheckerInfo } from '/@api/image-checker-info';
+
 import type { ProviderUI } from './ProviderResultPage';
 import SlideToggle from './SlideToggle.svelte';
-import Spinner from './Spinner.svelte';
 import ToggleButton from './ToggleButton.svelte';
 import ToggleButtonGroup from './ToggleButtonGroup.svelte';
 
@@ -174,6 +175,7 @@ function onSeverityClicked(severity: 'critical' | 'high' | 'medium' | 'low' | 's
             {/if}
             {#if provider.state === 'success'}
               <SlideToggle
+                id="{provider.info.id}"
                 on:checked="{event => onProviderChecked(provider.info.id, event.detail)}"
                 checked="{selectedProviders.get(provider.info.id) ?? true}" />
             {/if}

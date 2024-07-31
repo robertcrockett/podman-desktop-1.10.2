@@ -20,11 +20,12 @@ import type { ProviderStatus } from '@podman-desktop/api';
 import type { MenuItemConstructorOptions, NativeImage, Tray } from 'electron';
 import { app, ipcMain, Menu, nativeImage } from 'electron';
 
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info.js';
+
 import statusBusy from './assets/status-busy.png';
 import statusStarted from './assets/status-started.png';
 import statusStopped from './assets/status-stopped.png';
 import statusUnknown from './assets/status-unknown.png';
-import type { ProviderContainerConnectionInfo, ProviderInfo } from './plugin/api/provider-info.js';
 import type { AnimatedTray, TrayIconStatus } from './tray-animate-icon.js';
 import { findWindow, isMac, isWindows } from './util.js';
 
@@ -114,7 +115,7 @@ export class TrayMenu {
           };
         });
       }
-      this.menuCustomItems.set(param.menuItem.id || 'default', param.menuItem);
+      this.menuCustomItems.set(param.menuItem.id ?? 'default', param.menuItem);
 
       // create menu first time
       this.updateMenu();
@@ -213,7 +214,7 @@ export class TrayMenu {
 
   public updateProvider(provider: ProviderInfo): void {
     const menuProviderItem =
-      this.menuProviderItems.get(provider.internalId) ||
+      this.menuProviderItems.get(provider.internalId) ??
       Array.from(this.menuProviderItems.values()).find(item => item.id === provider.id);
     if (menuProviderItem) {
       menuProviderItem.status = provider.status;
@@ -275,7 +276,7 @@ export class TrayMenu {
       item => item.status === 'started',
     );
 
-    const hasOneStarted = hasOneProviderBeingStarted || hasOneProviderConnectionBeingStarted;
+    const hasOneStarted = hasOneProviderBeingStarted ?? hasOneProviderConnectionBeingStarted;
     // is that one provider is being stopped or being started
     const hasOneProviderStartingOrStopping = Array.from(this.menuProviderItems.values()).find(
       item => item.status === 'starting' || item.status === 'stopping',
@@ -283,7 +284,7 @@ export class TrayMenu {
     const hasOneProviderConnectionStartingOrStopping = Array.from(
       this.menuContainerProviderConnectionItems.values(),
     ).find(item => item.status === 'starting' || item.status === 'stopping');
-    const hasOneStartingOrStopping = hasOneProviderStartingOrStopping || hasOneProviderConnectionStartingOrStopping;
+    const hasOneStartingOrStopping = hasOneProviderStartingOrStopping ?? hasOneProviderConnectionStartingOrStopping;
 
     if (hasOneStartingOrStopping !== undefined) {
       this.globalStatus = 'updating';

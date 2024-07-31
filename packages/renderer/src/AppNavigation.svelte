@@ -1,5 +1,6 @@
 <script lang="ts">
 import { faCircleUser } from '@fortawesome/free-regular-svg-icons';
+import { ContainerIcon } from '@podman-desktop/ui-svelte/icons';
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/store';
 import Fa from 'svelte-fa';
@@ -7,20 +8,21 @@ import type { TinroRouteMeta } from 'tinro';
 
 import Webviews from '/@/lib/webview/Webviews.svelte';
 import { webviews } from '/@/stores/webviews';
+import type { ImageInfo } from '/@api/image-info';
 
-import type { ImageInfo } from '../../main/src/plugin/api/image-info';
 import { CommandRegistry } from './lib/CommandRegistry';
 import NewContentOnDashboardBadge from './lib/dashboard/NewContentOnDashboardBadge.svelte';
 import { ImageUtils } from './lib/image/image-utils';
-import ContainerIcon from './lib/images/ContainerIcon.svelte';
 import DashboardIcon from './lib/images/DashboardIcon.svelte';
 import DeploymentIcon from './lib/images/DeploymentIcon.svelte';
 import ExtensionIcon from './lib/images/ExtensionIcon.svelte';
 import ImageIcon from './lib/images/ImageIcon.svelte';
 import IngressRouteIcon from './lib/images/IngressRouteIcon.svelte';
 import KubeIcon from './lib/images/KubeIcon.svelte';
+import NodeIcon from './lib/images/NodeIcon.svelte';
 import PodIcon from './lib/images/PodIcon.svelte';
 import PuzzleIcon from './lib/images/PuzzleIcon.svelte';
+import PVCIcon from './lib/images/PVCIcon.svelte';
 import ServiceIcon from './lib/images/ServiceIcon.svelte';
 import SettingsIcon from './lib/images/SettingsIcon.svelte';
 import VolumeIcon from './lib/images/VolumeIcon.svelte';
@@ -34,6 +36,8 @@ import { kubernetesContexts } from './stores/kubernetes-contexts';
 import {
   kubernetesCurrentContextDeployments,
   kubernetesCurrentContextIngresses,
+  kubernetesCurrentContextNodes,
+  kubernetesCurrentContextPersistentVolumeClaims,
   kubernetesCurrentContextRoutes,
   kubernetesCurrentContextServices,
 } from './stores/kubernetes-contexts-state';
@@ -45,7 +49,9 @@ let containerInfoSubscribe: Unsubscriber;
 let imageInfoSubscribe: Unsubscriber;
 let volumeInfoSubscribe: Unsubscriber;
 let contextsSubscribe: Unsubscriber;
+let nodesSubscribe: Unsubscriber;
 let deploymentsSubscribe: Unsubscriber;
+let persistentVolumeClaimsSubscribe: Unsubscriber;
 let servicesSubscribe: Unsubscriber;
 let ingressesSubscribe: Unsubscriber;
 let routesSubscribe: Unsubscriber;
@@ -55,8 +61,10 @@ let podCount = '';
 let containerCount = '';
 let imageCount = '';
 let volumeCount = '';
+let persistentVolumeClaimsCount = '';
 let contextCount = 0;
 let deploymentCount = '';
+let nodeCount = '';
 let serviceCount = '';
 let ingressesCount = 0;
 let routesCount = 0;
@@ -108,6 +116,20 @@ onMount(async () => {
       deploymentCount = '';
     }
   });
+  persistentVolumeClaimsSubscribe = kubernetesCurrentContextPersistentVolumeClaims.subscribe(value => {
+    if (value.length > 0) {
+      persistentVolumeClaimsCount = ' (' + value.length + ')';
+    } else {
+      persistentVolumeClaimsCount = '';
+    }
+  });
+  nodesSubscribe = kubernetesCurrentContextNodes.subscribe(value => {
+    if (value.length > 0) {
+      nodeCount = ' (' + value.length + ')';
+    } else {
+      nodeCount = '';
+    }
+  });
   servicesSubscribe = kubernetesCurrentContextServices.subscribe(value => {
     if (value.length > 0) {
       serviceCount = ' (' + value.length + ')';
@@ -151,8 +173,14 @@ onDestroy(() => {
   if (contextsSubscribe) {
     contextsSubscribe();
   }
+  if (nodesSubscribe) {
+    nodesSubscribe();
+  }
   if (deploymentsSubscribe) {
     deploymentsSubscribe();
+  }
+  if (persistentVolumeClaimsSubscribe) {
+    persistentVolumeClaimsSubscribe();
   }
   if (servicesSubscribe) {
     servicesSubscribe();
@@ -211,6 +239,9 @@ export let meta: TinroRouteMeta;
   {#if contextCount > 0}
     <NavSection tooltip="Kubernetes">
       <KubeIcon size="{iconSize}" slot="icon" />
+      <NavItem href="/nodes" tooltip="Nodes{nodeCount}" ariaLabel="Nodes" bind:meta="{meta}">
+        <NodeIcon size="{iconSize}" />
+      </NavItem>
       <NavItem href="/deployments" tooltip="Deployments{deploymentCount}" ariaLabel="Deployments" bind:meta="{meta}">
         <DeploymentIcon size="{iconSize}" />
       </NavItem>
@@ -223,6 +254,13 @@ export let meta: TinroRouteMeta;
         ariaLabel="Ingresses & Routes"
         bind:meta="{meta}">
         <IngressRouteIcon size="{iconSize}" />
+      </NavItem>
+      <NavItem
+        href="/persistentvolumeclaims"
+        tooltip="Persistent Volume Claims{persistentVolumeClaimsCount}"
+        ariaLabel="Persistent Volume Claims"
+        bind:meta="{meta}">
+        <PVCIcon size="{iconSize}" />
       </NavItem>
     </NavSection>
   {/if}
@@ -247,7 +285,7 @@ export let meta: TinroRouteMeta;
     tooltip="Accounts"
     bind:meta="{meta}"
     onClick="{event => window.showAccountsMenu(event.x, event.y)}">
-    <Fa class="ml-[-3px] h-6 w-6 fa-light" icon="{faCircleUser}" size="lg" style="fa-light" />
+    <Fa class="h-6 w-6 fa-light" icon="{faCircleUser}" size="lg" style="fa-light" />
   </NavItem>
 
   <NavItem

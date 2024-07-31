@@ -42,10 +42,11 @@ test('Expect simple column styling', async () => {
     status: 'USED',
     icon: ImageIcon,
     badges: [],
+    digest: 'sha256:1234567890',
   };
   render(ImageColumnStatus, { object: image });
 
   const text = screen.getByRole('status');
   expect(text).toBeInTheDocument();
-  expect(text).toHaveClass('bg-status-running');
+  expect(text).toHaveClass('bg-[var(--pd-status-running)]');
 });

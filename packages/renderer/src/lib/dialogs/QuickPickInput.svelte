@@ -1,11 +1,9 @@
 <script lang="ts">
+import { Button, Checkbox, Modal } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount, tick } from 'svelte';
 
 import Markdown from '/@/lib/markdown/Markdown.svelte';
-import Button from '/@/lib/ui/Button.svelte';
-import Checkbox from '/@/lib/ui/Checkbox.svelte';
 
-import { tabWithinParent } from './dialog-utils';
 import type { InputBoxOptions, QuickPickOptions } from './quickpick-input';
 
 const ENTER = 'Enter';
@@ -42,16 +40,16 @@ const showInputCallback = (inputCallpackParameter: unknown) => {
   inputValue = options?.value;
   placeHolder = options?.placeHolder;
   title = options?.title;
-  currentId = options?.id || 0;
+  currentId = options?.id ?? 0;
   if (options?.prompt) {
     prompt = `${options.prompt} (${DEFAULT_PROMPT})`;
   } else {
     prompt = DEFAULT_PROMPT;
   }
   markdownDescription = options?.markdownDescription;
-  multiline = options?.multiline || false;
+  multiline = options?.multiline ?? false;
 
-  validationEnabled = options?.validate || false;
+  validationEnabled = options?.validate ?? false;
   display = true;
   tick()
     .then(() => {
@@ -72,19 +70,19 @@ const showQuickPickCallback = (quickpickParameter: unknown) => {
   mode = 'QuickPick';
   placeHolder = options?.placeHolder;
   title = options?.title;
-  currentId = options?.id || 0;
+  currentId = options?.id ?? 0;
   if (options?.prompt) {
     prompt = options.prompt;
   }
-  quickPickItems = (options?.items || []).map(item => {
+  quickPickItems = (options?.items ?? []).map(item => {
     if (typeof item === 'string') {
       return { value: item, description: '', detail: '', checkbox: false };
     } else {
       // if type is QuickPickItem use label field for the display
       return {
-        value: item.label || '',
-        description: item.description || '',
-        detail: item.detail || '',
+        value: item.label ?? '',
+        description: item.description ?? '',
+        detail: item.detail ?? '',
         checkbox: false,
       };
     }
@@ -124,6 +122,18 @@ onMount(() => {
   // handle the showInputBox events
   window.events?.receive('showQuickPick:add', showQuickPickCallback);
 });
+
+const onClose = () => {
+  if (validationError) {
+    return;
+  }
+  if (mode === 'QuickPick') {
+    window.sendShowQuickPickValues(currentId, []);
+  } else if (mode === 'InputBox') {
+    window.sendShowInputBoxValue(currentId, undefined, undefined);
+  }
+  cleanup();
+};
 
 async function onInputChange(event: any) {
   // in case of quick pick, filter the items
@@ -214,21 +224,7 @@ function handleKeydown(e: KeyboardEvent) {
     return;
   }
 
-  if (e.key === 'Escape') {
-    // In case of validating error, do not proceed
-    if (validationError) {
-      e.preventDefault();
-      return;
-    }
-    if (mode === 'QuickPick') {
-      window.sendShowQuickPickValues(currentId, []);
-    } else if (mode === 'InputBox') {
-      window.sendShowInputBoxValue(currentId, undefined, undefined);
-    }
-    cleanup();
-    e.preventDefault();
-    return;
-  } else if (e.key === 'Enter') {
+  if (e.key === 'Enter') {
     if (mode === 'InputBox') {
       // In case of validating error, do not proceed
       if (validationError) {
@@ -280,10 +276,6 @@ function handleKeydown(e: KeyboardEvent) {
       return;
     }
   }
-
-  if (e.key === 'Tab' && outerDiv) {
-    tabWithinParent(e, outerDiv);
-  }
 }
 
 function handleMousedown(e: MouseEvent) {
@@ -297,16 +289,11 @@ function handleMousedown(e: MouseEvent) {
 <svelte:window on:keydown="{handleKeydown}" on:mousedown="{handleMousedown}" />
 
 {#if display}
-  <!-- Create overlay-->
-  <div class="fixed top-0 left-0 right-0 bottom-0 bg-black bg-opacity-60 h-full z-40"></div>
-
-  <div class="absolute m-auto left-0 right-0 z-50">
+  <Modal on:close="{onClose}" name="{title}" top>
     <div class="flex justify-center items-center mt-1">
       <div
         bind:this="{outerDiv}"
-        class="bg-charcoal-800 w-[700px] {mode === 'InputBox'
-          ? 'h-fit'
-          : ''} shadow-sm p-2 rounded shadow-zinc-700 text-sm">
+        class="w-[700px] {mode === 'InputBox' ? 'h-fit' : ''} shadow-sm p-2 rounded shadow-zinc-700 text-sm">
         {#if title}
           <div
             aria-label="title"
@@ -384,5 +371,5 @@ function handleMousedown(e: MouseEvent) {
         {/if}
       </div>
     </div>
-  </div>
+  </Modal>
 {/if}

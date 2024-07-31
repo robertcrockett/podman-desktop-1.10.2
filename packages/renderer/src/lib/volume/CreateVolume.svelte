@@ -2,19 +2,17 @@
 /* eslint-disable import/no-duplicates */
 // https://github.com/import-js/eslint-plugin-import/issues/1479
 import { faPlusCircle } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, Input } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 import { get } from 'svelte/store';
 import { router } from 'tinro';
 
 import NoContainerEngineEmptyScreen from '/@/lib/image/NoContainerEngineEmptyScreen.svelte';
 import VolumeIcon from '/@/lib/images/VolumeIcon.svelte';
-import Button from '/@/lib/ui/Button.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import { providerInfos } from '/@/stores/providers';
-
 /* eslint-enable import/no-duplicates */
-import type { ProviderContainerConnectionInfo, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
 
 let providers: ProviderInfo[] = [];
 let providerConnections: ProviderContainerConnectionInfo[] = [];
@@ -59,7 +57,7 @@ export let volumeName = '';
   <svelte:fragment slot="icon">
     <VolumeIcon />
   </svelte:fragment>
-  <div slot="content" class="p-5 min-w-full h-full">
+  <div slot="content" class="px-5 pb-5 min-w-full h-full">
     {#if providerConnections.length === 0}
       <NoContainerEngineEmptyScreen />
     {:else}

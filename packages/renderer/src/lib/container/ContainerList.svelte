@@ -1,14 +1,24 @@
 <script lang="ts">
-import { faChevronDown, faChevronRight, faPlusCircle, faTrash } from '@fortawesome/free-solid-svg-icons';
-import moment from 'moment';
+import { faPlusCircle, faTrash } from '@fortawesome/free-solid-svg-icons';
+import {
+  Button,
+  FilteredEmptyScreen,
+  Modal,
+  NavPage,
+  Table,
+  TableColumn,
+  TableDurationColumn,
+  TableRow,
+} from '@podman-desktop/ui-svelte';
+import { ContainerIcon } from '@podman-desktop/ui-svelte/icons';
 import { onDestroy, onMount } from 'svelte';
 import { get, type Unsubscriber } from 'svelte/store';
-import Fa from 'svelte-fa';
 import { router } from 'tinro';
 
-import type { ContainerInfo } from '../../../../main/src/plugin/api/container-info';
+import type { ContainerInfo } from '/@api/container-info';
+import type { ViewInfoUI } from '/@api/view-info';
+
 import type { PodInfo } from '../../../../main/src/plugin/api/pod-info';
-import type { ViewInfoUI } from '../../../../main/src/plugin/api/view-info';
 import { containerGroupsInfo } from '../../stores/containerGroups';
 import { containersInfos } from '../../stores/containers';
 import { context } from '../../stores/context';
@@ -17,28 +27,19 @@ import { podsInfos } from '../../stores/pods';
 import { providerInfos } from '../../stores/providers';
 import { findMatchInLeaves } from '../../stores/search-util';
 import { viewsContributions } from '../../stores/views';
-import ComposeActions from '../compose/ComposeActions.svelte';
 import type { ContextUI } from '../context/context';
-import Modal from '../dialogs/Modal.svelte';
 import type { EngineInfoUI } from '../engine/EngineInfoUI';
 import Prune from '../engine/Prune.svelte';
 import NoContainerEngineEmptyScreen from '../image/NoContainerEngineEmptyScreen.svelte';
-import ContainerIcon from '../images/ContainerIcon.svelte';
-import PodIcon from '../images/PodIcon.svelte';
 import SolidPodIcon from '../images/SolidPodIcon.svelte';
-import StatusIcon from '../images/StatusIcon.svelte';
 import { PodUtils } from '../pod/pod-utils';
-import PodActions from '../pod/PodActions.svelte';
-import Button from '../ui/Button.svelte';
-import Checkbox from '../ui/Checkbox.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
-import FilteredEmptyScreen from '../ui/FilteredEmptyScreen.svelte';
-import NavPage from '../ui/NavPage.svelte';
-import ProviderInfo from '../ui/ProviderInfo.svelte';
-import StateChange from '../ui/StateChange.svelte';
 import { CONTAINER_LIST_VIEW } from '../view/views';
 import { ContainerUtils } from './container-utils';
-import ContainerActions from './ContainerActions.svelte';
+import ContainerColumnActions from './ContainerColumnActions.svelte';
+import ContainerColumnEnvironment from './ContainerColumnEnvironment.svelte';
+import ContainerColumnImage from './ContainerColumnImage.svelte';
+import ContainerColumnName from './ContainerColumnName.svelte';
+import ContainerColumnStatus from './ContainerColumnStatus.svelte';
 import ContainerEmptyScreen from './ContainerEmptyScreen.svelte';
 import { ContainerGroupInfoTypeUI, type ContainerGroupInfoUI, type ContainerInfoUI } from './ContainerInfoUI';
 
@@ -64,88 +65,9 @@ $: providerConnections = $providerInfos
   .flat()
   .filter(providerContainerConnection => providerContainerConnection.status === 'started');
 
-// number of selected items in the list
-$: selectedItemsNumber =
-  containerGroups.reduce(
-    (previous, current) => previous + current.containers.filter(container => container.selected).length,
-    0,
-  ) + containerGroups.filter(group => group.selected).length;
-
-// do we need to unselect all checkboxes if we don't have all items being selected ?
-$: selectedAllCheckboxes =
-  containerGroups.filter(group => group.type !== ContainerGroupInfoTypeUI.STANDALONE).every(group => group.selected) &&
-  containerGroups
-    .map(group => group.containers)
-    .flat()
-    .every(container => container.selected);
-
-let refreshTimeouts: NodeJS.Timeout[] = [];
-
-const SECOND = 1000;
-function refreshUptime() {
-  containerGroups = containerGroups.map(containerGroupUiInfo => {
-    containerGroupUiInfo.containers = containerGroupUiInfo.containers.map(containerUiInfo => {
-      return { ...containerUiInfo, uptime: containerUtils.refreshUptime(containerUiInfo) };
-    });
-    return containerGroupUiInfo;
-  });
-
-  // compute new interval
-  const newInterval = computeInterval();
-  refreshTimeouts.forEach(timeout => clearTimeout(timeout));
-  refreshTimeouts.length = 0;
-  refreshTimeouts.push(setTimeout(refreshUptime, newInterval));
-}
-
-function computeInterval(): number {
-  const allContainers = containerGroups.map(group => group.containers).flat();
-  // no container running, no refresh
-  if (!allContainers.some(container => container.state === 'RUNNING')) {
-    return -1;
-  }
-
-  // limit to containers running
-  const runningContainers = allContainers.filter(container => container.state === 'RUNNING');
-
-  // do we have containers that have been started in less than 1 minute
-  // if so, need to update every second
-  const containersStartedInLessThan1Mn = runningContainers.filter(
-    container => moment().diff(container.startedAt, 'minutes') < 1,
-  );
-  if (containersStartedInLessThan1Mn.length > 0) {
-    return 2 * SECOND;
-  }
-
-  // every minute for containers started less than 1 hour
-  const containersStartedInLessThan1Hour = runningContainers.filter(
-    container => moment().diff(container.startedAt, 'hours') < 1,
-  );
-  if (containersStartedInLessThan1Hour.length > 0) {
-    // every minute
-    return 60 * SECOND;
-  }
-
-  // every hour for containers started less than 1 day
-  const containersStartedInLessThan1Day = runningContainers.filter(
-    container => moment().diff(container.startedAt, 'days') < 1,
-  );
-  if (containersStartedInLessThan1Day.length > 0) {
-    // every hour
-    return 60 * 60 * SECOND;
-  }
-
-  // every day
-  return 60 * 60 * 24 * SECOND;
-}
-
-function toggleCheckboxContainerGroup(checked: boolean, containerGroup: ContainerGroupInfoUI) {
-  // need to apply that on all containers
-  containerGroup.containers.forEach(container => (container.selected = checked));
-}
-
 // delete the items selected in the list
 let bulkDeleteInProgress = false;
-async function deleteSelectedContainers() {
+async function deleteSelectedContainers(): Promise<void> {
   const podGroups = containerGroups
     .filter(group => group.type === ContainerGroupInfoTypeUI.POD)
     .filter(pod => pod.selected);
@@ -204,7 +126,7 @@ async function deleteSelectedContainers() {
   bulkDeleteInProgress = false;
 }
 
-function createPodFromContainers() {
+function createPodFromContainers(): void {
   const selectedContainers = containerGroups
     .map(group => group.containers)
     .flat()
@@ -269,7 +191,7 @@ function updateContainers(
   globalContext: ContextUI,
   viewContributions: ViewInfoUI[],
   searchTerm: string,
-) {
+): void {
   containersInfo = containers;
   const currentContainers = containers.map((containerInfo: ContainerInfo) => {
     return containerUtils.getContainerInfoUI(containerInfo, globalContext, viewContributions);
@@ -331,27 +253,11 @@ function updateContainers(
 
   // update the value
   containerGroups = computedContainerGroups;
-
-  // compute refresh interval
-  const interval = computeInterval();
-  refreshTimeouts.push(setTimeout(refreshUptime, interval));
-}
-
-function displayContainersCount(containerGroup: ContainerGroupInfoUI) {
-  let result = containerGroup.allContainersCount + ' container' + (containerGroup.allContainersCount > 1 ? 's' : '');
-  if (containerGroup.containers.length !== containerGroup.allContainersCount) {
-    result += ` (${containerGroup.allContainersCount - containerGroup.containers.length} filtered)`;
-  }
-  return result;
 }
 
 onDestroy(() => {
   // store current groups for later
   containerGroupsInfo.set(containerGroups);
-
-  // kill timers
-  refreshTimeouts.forEach(timeout => clearTimeout(timeout));
-  refreshTimeouts.length = 0;
 
   // unsubscribe from the store
   if (containersUnsubscribe) {
@@ -368,25 +274,10 @@ onDestroy(() => {
   }
 });
 
-function openDetailsContainer(container: ContainerInfoUI) {
-  router.goto(`/containers/${container.id}/`);
-}
-
-function keydownChoice(e: KeyboardEvent) {
+function keydownChoice(e: KeyboardEvent): void {
   e.stopPropagation();
   if (e.key === 'Escape') {
     toggleCreateContainer();
-  }
-}
-
-function openGroupDetails(containerGroup: ContainerGroupInfoUI): void {
-  if (!containerGroup.engineId) {
-    return;
-  }
-  if (containerGroup.type === ContainerGroupInfoTypeUI.POD) {
-    router.goto(`/pods/podman/${encodeURI(containerGroup.name)}/${encodeURIComponent(containerGroup.engineId)}/logs`);
-  } else if (containerGroup.type === ContainerGroupInfoTypeUI.COMPOSE) {
-    router.goto(`/compose/details/${encodeURI(containerGroup.name)}/${encodeURI(containerGroup.engineId)}/logs`);
   }
 }
 
@@ -399,32 +290,81 @@ function fromDockerfile(): void {
   router.goto('/images/build');
 }
 
-function toggleContainerGroup(containerGroup: ContainerGroupInfoUI) {
-  containerGroup.expanded = !containerGroup.expanded;
-  // update the group expanded attribute if this is the matching group
-  containerGroups = containerGroups.map(group => (group.name === containerGroup.name ? containerGroup : group));
-}
-
-function toggleAllContainerGroups(checked: boolean) {
-  const toggleContainers = containerGroups;
-  toggleContainers
-    .filter(group => group.type !== ContainerGroupInfoTypeUI.STANDALONE)
-    .forEach(group => (group.selected = checked));
-  toggleContainers.forEach(group => group.containers.forEach(container => (container.selected = checked)));
-  containerGroups = toggleContainers;
-}
-
-function resetRunningFilter() {
+function resetRunningFilter(): void {
   searchTerm = containerUtils.filterResetRunning(searchTerm);
 }
 
-function setRunningFilter() {
+function setRunningFilter(): void {
   searchTerm = containerUtils.filterSetRunning(searchTerm);
 }
 
-function setStoppedFilter() {
+function setStoppedFilter(): void {
   searchTerm = containerUtils.filterSetStopped(searchTerm);
 }
+
+let selectedItemsNumber: number;
+let table: Table;
+
+let statusColumn = new TableColumn<ContainerInfoUI | ContainerGroupInfoUI>('Status', {
+  align: 'center',
+  width: '70px',
+  renderer: ContainerColumnStatus,
+});
+
+let nameColumn = new TableColumn<ContainerInfoUI | ContainerGroupInfoUI>('Name', {
+  width: '2fr',
+  renderer: ContainerColumnName,
+  comparator: (a, b) => a.name.localeCompare(b.name),
+});
+
+let envColumn = new TableColumn<ContainerInfoUI | ContainerGroupInfoUI>('Environment', {
+  renderer: ContainerColumnEnvironment,
+});
+
+let imageColumn = new TableColumn<ContainerInfoUI | ContainerGroupInfoUI>('Image', {
+  width: '3fr',
+  renderer: ContainerColumnImage,
+});
+
+let ageColumn = new TableColumn<ContainerInfoUI | ContainerGroupInfoUI, Date | undefined>('Age', {
+  renderer: TableDurationColumn,
+  renderMapping(object): Date | undefined {
+    if (containerUtils.isContainerInfoUI(object)) {
+      return containerUtils.getUpDate(object);
+    }
+    return undefined;
+  },
+});
+
+const columns = [
+  statusColumn,
+  nameColumn,
+  envColumn,
+  imageColumn,
+  ageColumn,
+  new TableColumn<ContainerInfoUI | ContainerGroupInfoUI>('Actions', {
+    align: 'right',
+    width: '150px',
+    renderer: ContainerColumnActions,
+    overflow: true,
+  }),
+];
+
+const row = new TableRow<ContainerGroupInfoUI | ContainerInfoUI>({
+  selectable: _container => true,
+  children: object => {
+    if ('type' in object && object.type !== ContainerGroupInfoTypeUI.STANDALONE) {
+      return object.containers;
+    } else {
+      return [];
+    }
+  },
+});
+
+let containersAndGroups: (ContainerGroupInfoUI | ContainerInfoUI)[];
+$: containersAndGroups = containerGroups.map(group =>
+  group?.type === ContainerGroupInfoTypeUI.STANDALONE ? group.containers[0] : group,
+);
 </script>
 
 <NavPage bind:searchTerm="{searchTerm}" title="containers">
@@ -467,204 +407,16 @@ function setStoppedFilter() {
   </svelte:fragment>
 
   <div class="flex min-w-full h-full" slot="content">
-    <table class="mx-5 w-full h-fit" class:hidden="{containerGroups.length === 0}">
-      <!-- title -->
-      <thead class="sticky top-0 bg-charcoal-700 z-[2]">
-        <tr class="h-7 uppercase text-xs text-gray-600">
-          <th class="whitespace-nowrap w-5"></th>
-          <th class="px-2 w-5">
-            <Checkbox
-              title="Toggle all"
-              bind:checked="{selectedAllCheckboxes}"
-              indeterminate="{selectedItemsNumber > 0 && !selectedAllCheckboxes}"
-              on:click="{event => toggleAllContainerGroups(event.detail)}" />
-          </th>
-          <th class="text-center font-extrabold w-10 px-2">Status</th>
-          <th>Name</th>
-          <th class="pl-3">Environment</th>
-          <th class="pl-3">Image</th>
-          <th class="pl-3">Age</th>
-          <th class="text-right pr-2">Actions</th>
-        </tr>
-      </thead>
-
-      <!-- Display each group -->
-      <tbody>
-        {#each containerGroups as containerGroup}
-          {#if containerGroup.type === ContainerGroupInfoTypeUI.COMPOSE || containerGroup.type === ContainerGroupInfoTypeUI.POD}
-            <tr class="group h-12 bg-charcoal-800 hover:bg-zinc-700">
-              <td
-                class="bg-charcoal-800 group-hover:bg-zinc-700 pl-2 w-3 rounded-tl-lg"
-                class:rounded-bl-lg="{!containerGroup.expanded}"
-                on:click="{() => toggleContainerGroup(containerGroup)}">
-                <Fa
-                  size="0.8x"
-                  class="text-gray-700 cursor-pointer"
-                  icon="{containerGroup.expanded ? faChevronDown : faChevronRight}" />
-              </td>
-              <td class="px-2">
-                <Checkbox
-                  title="Toggle {containerGroup.type}"
-                  bind:checked="{containerGroup.selected}"
-                  on:click="{event => toggleCheckboxContainerGroup(event.detail, containerGroup)}" />
-              </td>
-              <td class="flex flex-row justify-center h-12" title="{containerGroup.type}">
-                <div class="grid place-content-center ml-3 mr-4">
-                  <StatusIcon icon="{PodIcon}" status="{containerGroup.status}" />
-                </div>
-              </td>
-              <td class="whitespace-nowrap hover:cursor-pointer">
-                <div class="flex items-center text-sm text-gray-300 overflow-hidden text-ellipsis">
-                  <div>
-                    <button
-                      class="text-sm text-gray-300 overflow-hidden text-ellipsis"
-                      title="{containerGroup.type}"
-                      on:click="{() => openGroupDetails(containerGroup)}">
-                      {containerGroup.name} ({containerGroup.type})
-                    </button>
-                    <div class="text-xs font-extra-light text-gray-900">
-                      {displayContainersCount(containerGroup)}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td class="pl-3 whitespace-nowrap hover:cursor-pointer group">
-                <div class="flex items-center text-xs p-1 rounded-md text-gray-500"></div>
-              </td>
-              <td class="px-6 py-2 whitespace-nowrap w-10"> </td>
-              <td class="whitespace-nowrap pl-3">
-                <div class="flex items-center">
-                  <div class="text-sm text-gray-700"></div>
-                </div>
-              </td>
-              <td
-                class="pl-6 text-right whitespace-nowrap rounded-tr-lg"
-                class:rounded-br-lg="{!containerGroup.expanded}">
-                <!-- Only show POD actions if the container group is POD, otherwise keep blank / empty (for future compose implementation) -->
-                {#if containerGroup.type === ContainerGroupInfoTypeUI.POD && containerGroup.engineId && containerGroup.id && containerGroup.shortId && containerGroup.status && containerGroup.engineName && containerGroup.humanCreationDate && containerGroup.created}
-                  <PodActions
-                    pod="{{
-                      id: containerGroup.id,
-                      shortId: containerGroup.shortId,
-                      status: containerGroup.status,
-                      name: containerGroup.name,
-                      engineId: containerGroup.engineId,
-                      engineName: containerGroup.engineName,
-                      age: containerGroup.humanCreationDate,
-                      created: containerGroup.created,
-                      selected: false,
-                      containers: containerGroup.containers.map(container => ({
-                        Id: container.id,
-                        Names: container.name,
-                        Status: container.state,
-                      })),
-                      kind: 'podman',
-                    }}"
-                    dropdownMenu="{true}"
-                    on:update="{() => (containerGroups = [...containerGroups])}" />
-                {/if}
-                {#if containerGroup.type === ContainerGroupInfoTypeUI.COMPOSE && containerGroup.status && containerGroup.engineId && containerGroup.engineType}
-                  <ComposeActions
-                    compose="{{
-                      status: containerGroup.status,
-                      name: containerGroup.name,
-                      engineId: containerGroup.engineId,
-                      engineType: containerGroup.engineType,
-                      containers: containerGroup.containers,
-                    }}"
-                    dropdownMenu="{true}"
-                    on:update="{() => {
-                      containerGroups = [...containerGroups];
-                    }}" />
-                {/if}
-              </td>
-            </tr>
-          {/if}
-          <!-- Display each container of this group -->
-          {#if containerGroup.expanded}
-            {#each containerGroup.containers as container, index}
-              <tr class="group h-12 bg-charcoal-800 hover:bg-zinc-700" aria-label="{container.name}">
-                <td
-                  class="{containerGroup.type === ContainerGroupInfoTypeUI.STANDALONE ? 'rounded-tl-lg' : ''} {index ===
-                  containerGroup.containers.length - 1
-                    ? 'rounded-bl-lg'
-                    : ''}">
-                </td>
-                <td class="px-2">
-                  <Checkbox title="Toggle container" bind:checked="{container.selected}" />
-                </td>
-                <td class="flex flex-row justify-center h-12">
-                  <div class="grid place-content-center ml-3 mr-4">
-                    <StatusIcon icon="{container.icon}" status="{container.state}" />
-                  </div>
-                </td>
-                <td
-                  class="whitespace-nowrap hover:cursor-pointer group"
-                  on:click="{() => openDetailsContainer(container)}">
-                  <div class="flex items-center">
-                    <div class="">
-                      <div class="flex flex-nowrap">
-                        <div
-                          class="text-sm text-gray-300 overflow-hidden text-ellipsis group-hover:text-violet-400"
-                          title="{container.name}">
-                          {container.name}
-                        </div>
-                      </div>
-                      <div class="flex flex-nowrap text-xs font-extra-light text-gray-900 items-center">
-                        <div>{container.state}</div>
-                        <div class="pl-2 pr-2 inline-flex">{container.displayPort}</div>
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td class="pl-3 whitespace-nowrap hover:cursor-pointer group">
-                  <div class="flex items-center text-xs p-1 rounded-md text-gray-500">
-                    <ProviderInfo provider="{container.engineType}" context="{container.engineId}" />
-                  </div>
-                </td>
-                <!-- Open the container details, TODO: open image details instead? -->
-                <td
-                  class="pl-3 whitespace-nowrap hover:cursor-pointer group"
-                  on:click="{() => openDetailsContainer(container)}">
-                  <div class="flex items-center">
-                    <div class="text-sm text-gray-700 overflow-hidden text-ellipsis" title="{container.image}">
-                      {container.shortImage}
-                    </div>
-                  </div></td>
-                <td class="whitespace-nowrap pl-3">
-                  <div class="flex items-center">
-                    <div class="text-sm text-gray-700">
-                      <StateChange state="{container.state}">{container.uptime}</StateChange>
-                    </div>
-                  </div>
-                </td>
-                <td
-                  class="pl-6 text-right whitespace-nowrap {containerGroup.type === ContainerGroupInfoTypeUI.STANDALONE
-                    ? 'rounded-tr-lg'
-                    : ''} {index === containerGroup.containers.length - 1 ? 'rounded-br-lg' : ''}">
-                  <div class="flex w-full">
-                    <div class="flex items-center w-5">
-                      {#if container.actionError}
-                        <ErrorMessage error="{container.actionError}" icon />
-                      {:else}
-                        <div>&nbsp;</div>
-                      {/if}
-                    </div>
-                    <div class="text-right w-full mr-[5px]">
-                      <ContainerActions
-                        container="{container}"
-                        dropdownMenu="{true}"
-                        on:update="{() => (containerGroups = [...containerGroups])}" />
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            {/each}
-          {/if}
-          <tr><td class="leading-[8px]">&nbsp;</td></tr>
-        {/each}
-      </tbody>
-    </table>
+    <Table
+      kind="container"
+      bind:this="{table}"
+      bind:selectedItemsNumber="{selectedItemsNumber}"
+      data="{containersAndGroups}"
+      columns="{columns}"
+      row="{row}"
+      defaultSortColumn="Name"
+      on:update="{() => (containerGroups = [...containerGroups])}">
+    </Table>
 
     {#if providerConnections.length === 0}
       <NoContainerEngineEmptyScreen />
@@ -694,16 +446,17 @@ function setStoppedFilter() {
     }}">
     <div
       role="presentation"
-      class="inline-block w-full overflow-hidden text-left transition-all transform bg-charcoal-600 z-50 rounded-xl shadow-xl shadow-charcoal-900"
+      class="inline-block w-full overflow-hidden text-left transition-all"
       on:keydown="{keydownChoice}">
-      <div class="flex items-center justify-between bg-black px-5 py-4 border-b-2 border-violet-700">
+      <div
+        class="flex items-center justify-between text-[var(--pd-modal-header-text)] bg-[var(--pd-modal-header-bg)] px-5 py-4 border-b-2 border-[var(--pd-modal-header-divider)]">
         <h1 class="text-xl font-bold">Create a new container</h1>
 
-        <button class="hover:text-gray-300 px-2 py-1" on:click="{() => toggleCreateContainer()}">
+        <button class="hover:text-[var(--pd-modal-text-hover)] px-2 py-1" on:click="{() => toggleCreateContainer()}">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>
-      <div class="bg-charcoal-600 p-5 h-full flex flex-col justify-items-center">
+      <div class="p-5 h-full flex flex-col justify-items-center text-[var(--pd-modal-text)]">
         <span class="pb-3">Choose the following:</span>
         <ul class="list-disc ml-8 space-y-2">
           <li>Create a container from a Containerfile</li>

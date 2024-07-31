@@ -1,5 +1,5 @@
 <script lang="ts">
-import Tooltip from '../ui/Tooltip.svelte';
+import { Tooltip } from '@podman-desktop/ui-svelte';
 
 export let percent = 0;
 export let size = 64;
@@ -26,7 +26,7 @@ $: stroke = percent < 0 ? '' : percent < 50 ? 'stroke-green-500' : percent < 75 
 $: tooltip = percent ? percent.toFixed(0) + '% ' + title + ' usage' : '';
 </script>
 
-<Tooltip tip="{tooltip}" bottom>
+<Tooltip bottom tip="{tooltip}">
   <svg viewBox="-4 -4 {size + 8} {size + 8}" height="{size}" width="{size}">
     <circle fill="none" class="stroke-charcoal-300" stroke-width="1" r="{size / 2}" cx="{size / 2}" cy="{size / 2}"
     ></circle>

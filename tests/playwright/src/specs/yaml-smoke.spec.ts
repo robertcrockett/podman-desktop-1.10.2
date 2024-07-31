@@ -27,6 +27,7 @@ import { NavigationBar } from '../model/workbench/navigation';
 import { PodmanDesktopRunner } from '../runner/podman-desktop-runner';
 import type { RunnerTestContext } from '../testContext/runner-test-context';
 import { deleteImage, deletePod } from '../utility/operations';
+import { waitForPodmanMachineStartup } from '../utility/wait';
 
 let pdRunner: PodmanDesktopRunner;
 let page: Page;
@@ -41,6 +42,7 @@ beforeAll(async () => {
   pdRunner.setVideoAndTraceName('play-yaml-e2e');
 
   await new WelcomePage(page).handleWelcomePage(true);
+  await waitForPodmanMachineStartup(page);
 });
 
 beforeEach<RunnerTestContext>(async ctx => {
@@ -71,7 +73,7 @@ describe.skipIf(process.env.GITHUB_ACTIONS && process.env.RUNNER_OS === 'Linux')
       const yamlFilePath = path.resolve(__dirname, '..', '..', 'resources', `${podAppName}.yaml`);
       podsPage = await playYamlPage.playYaml(yamlFilePath);
       await playExpect(podsPage.heading).toBeVisible();
-    }, 75000);
+    }, 150000);
 
     test('Checking that created pod from yaml is correct', async () => {
       const navigationBar = new NavigationBar(page);
@@ -90,6 +92,12 @@ describe.skipIf(process.env.GITHUB_ACTIONS && process.env.RUNNER_OS === 'Linux')
 
       await playExpect.poll(async () => await imagesPage.waitForImageExists(backendImage)).toBeTruthy();
       await playExpect.poll(async () => await imagesPage.waitForImageExists(frontendImage)).toBeTruthy();
+      await playExpect
+        .poll(async () => await imagesPage.getCurrentStatusOfImage(backendImage), { timeout: 15000 })
+        .toBe('UNUSED');
+      await playExpect
+        .poll(async () => await imagesPage.getCurrentStatusOfImage(frontendImage), { timeout: 15000 })
+        .toBe('UNUSED');
 
       let imageDetailsPage = await imagesPage.openImageDetails(backendImage);
       await playExpect(imageDetailsPage.heading).toContainText(backendImage);

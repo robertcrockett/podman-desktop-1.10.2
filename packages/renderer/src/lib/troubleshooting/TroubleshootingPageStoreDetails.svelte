@@ -1,13 +1,10 @@
 <script lang="ts">
 import { faRefresh, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { Button, CloseButton, Modal } from '@podman-desktop/ui-svelte';
 import humanizeDuration from 'humanize-duration';
 import moment from 'moment';
 
-import CloseButton from '/@/lib/ui/CloseButton.svelte';
 import type { EventStoreInfo } from '/@/stores/event-store';
-
-import Modal from '../dialogs/Modal.svelte';
-import Button from '../ui/Button.svelte';
 
 export let closeCallback: () => void;
 
@@ -25,9 +22,9 @@ async function fetch(): Promise<void> {
 </script>
 
 <Modal name="Details of {eventStoreInfo.name}" on:close="{() => closeCallback()}">
-  <div
-    class="inline-block w-full overflow-hidden text-left transition-all transform bg-charcoal-600 z-50 rounded-xl shadow-xl shadow-charcoal-900">
-    <div class="flex items-center justify-between px-5 py-4 mb-4">
+  <div class="inline-block w-full overflow-hidden text-left transition-all">
+    <div
+      class="flex items-center justify-between px-5 py-4 mb-4 text-[var(--pd-modal-header-text)] bg-[var(--pd-modal-header-bg)]">
       <h1 class="text-md font-semibold">
         <div class="flex flex-row items-center">
           <svelte:component this="{eventStoreInfo.iconComponent}" size="20" />
@@ -38,7 +35,7 @@ async function fetch(): Promise<void> {
     </div>
     <div class="overflow-y-auto px-4 pb-4">
       <div class="flex flex-col rounded-lg">
-        <div class="bg-charcoal-800 w-full p-4 mb-4">
+        <div class="bg-[var(--pd-card-bg)] text-[var(--pd-card-text)] w-full p-4 mb-4">
           <div class="pb-2 text-lg">Info:</div>
 
           <div class="mx-2 flex flex-row items-center">
@@ -52,7 +49,7 @@ async function fetch(): Promise<void> {
 
         <!-- Display buffer events-->
         <div class="pb-4">
-          <div class="bg-charcoal-800 w-full p-4 h-45">
+          <div class="bg-[var(--pd-card-bg)] text-[var(--pd-card-text)] w-full p-4 h-45">
             <div class="pb-2 text-lg">
               Updating events:
               {#if eventStoreInfo.bufferEvents.length > 0}

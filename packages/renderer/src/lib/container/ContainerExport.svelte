@@ -1,14 +1,12 @@
 <script lang="ts">
 import { faDownload } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import { router } from 'tinro';
 
 import { exportContainerInfo } from '/@/stores/export-container-store';
 import { createTask } from '/@/stores/tasks';
 
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
 import { Uri } from '../uri/Uri';
 import type { ContainerInfoUI } from './ContainerInfoUI';
@@ -90,7 +88,7 @@ async function exportContainer() {
       <i class="fas fa-download fa-2x" aria-hidden="true"></i>
     </svelte:fragment>
 
-    <div slot="content" class="flex flex-col min-w-full h-fit p-5">
+    <div slot="content" class="flex flex-col min-w-full h-fit px-5 pb-5">
       <div class="bg-charcoal-600 px-6 py-4 space-y-2 lg:px-8 sm:pb-6 xl:pb-8">
         <div>
           <label for="modalSelectTarget" class="block mb-2 text-sm font-medium text-gray-400">Export to:</label>

@@ -61,7 +61,7 @@ export class ExtensionsPage extends MainPage {
     await installButton.click();
 
     const doneButton = dialog.getByRole('button', { name: 'Done', exact: true });
-    await playExpect(doneButton).toBeEnabled({ timeout: 30000 });
+    await playExpect(doneButton).toBeEnabled({ timeout: 50000 });
     await doneButton.click();
 
     return this;
@@ -79,9 +79,9 @@ export class ExtensionsPage extends MainPage {
     return this.additionalActions.getByRole('button', { name: 'Install custom...', exact: true });
   }
 
-  public async openExtensionDetails(name: string, label: string): Promise<ExtensionDetailsPage> {
+  public async openExtensionDetails(name: string, label: string, heading: string): Promise<ExtensionDetailsPage> {
     const extensionCard = await this.getInstalledExtension(name, label);
-    return await extensionCard.openExtensionDetails();
+    return await extensionCard.openExtensionDetails(heading);
   }
 
   public async getInstalledExtension(name: string, label: string): Promise<ExtensionCardPage> {
@@ -94,6 +94,6 @@ export class ExtensionsPage extends MainPage {
   public async extensionIsInstalled(label: string): Promise<boolean> {
     await this.openInstalledTab();
     const extension = this.content.getByRole('region', { name: label });
-    return (await extension.count()) > 0 ? true : false;
+    return (await extension.count()) > 0;
   }
 }

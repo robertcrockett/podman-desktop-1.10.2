@@ -2,21 +2,19 @@
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/store';
 
-import type { ProviderContainerConnectionInfo, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
 
 let providerUnsubscribe: Unsubscriber;
 
 import { faCircleCheck } from '@fortawesome/free-solid-svg-icons';
 import type { V1NamespaceList } from '@kubernetes/client-node/dist/api';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
 
 import { providerInfos } from '../../stores/providers';
 import MonacoEditor from '../editor/MonacoEditor.svelte';
 import NoContainerEngineEmptyScreen from '../image/NoContainerEngineEmptyScreen.svelte';
 import KubePlayIcon from '../kube/KubePlayIcon.svelte';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
 import WarningMessage from '../ui/WarningMessage.svelte';
 
@@ -172,7 +170,7 @@ async function getKubernetesfileLocation() {
   <FormPage title="Create pods from a Kubernetes YAML file" inProgress="{runStarted && !runFinished}">
     <KubePlayIcon slot="icon" size="30px" />
 
-    <div slot="content" class="p-5 min-w-full h-fit">
+    <div slot="content" class="px-5 pb-5 min-w-full h-fit">
       <div class="bg-charcoal-800 px-6 py-4 space-y-6 lg:px-8 sm:pb-6 xl:pb-8 rounded-lg">
         <div class="text-xl font-medium">Select file:</div>
         <div hidden="{runStarted}">

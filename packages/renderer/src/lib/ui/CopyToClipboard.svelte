@@ -1,8 +1,7 @@
 <script lang="ts">
 import { faPaste } from '@fortawesome/free-solid-svg-icons';
+import { Tooltip } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
-
-import Tooltip from './Tooltip.svelte';
 
 export let clipboardData: string;
 export let title: string;
@@ -13,7 +12,7 @@ function copyTextToClipboard() {
 </script>
 
 <div class="float-right">
-  <Tooltip tip="Copy to Clipboard" bottom>
+  <Tooltip bottom tip="Copy to Clipboard">
     <button
       title="Copy To Clipboard"
       class="ml-5 {$$props.class || ''}"

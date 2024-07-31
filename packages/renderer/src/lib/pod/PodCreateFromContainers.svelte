@@ -1,20 +1,19 @@
 <script lang="ts">
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
+import { ContainerIcon } from '@podman-desktop/ui-svelte/icons';
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/store';
 import Fa from 'svelte-fa';
 import { router } from 'tinro';
 
-import type { ProviderContainerConnectionInfo, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
+
 import type { PodCreatePortOptions } from '../../../../main/src/plugin/dockerode/libpod-dockerode';
 import { type PodCreation, podCreationHolder } from '../../stores/creation-from-containers-store';
 import { providerInfos } from '../../stores/providers';
-import ContainerIcon from '../images/ContainerIcon.svelte';
 import SolidPodIcon from '../images/SolidPodIcon.svelte';
 import StatusIcon from '../images/StatusIcon.svelte';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
 
 let podCreation: PodCreation;
@@ -138,7 +137,7 @@ onMount(() => {
           exposed: true,
           container: container.name,
         });
-        mapPortPrivate.set(port.PrivatePort, [...(mapPortPrivate.get(port.PrivatePort) || []), container.name]);
+        mapPortPrivate.set(port.PrivatePort, [...(mapPortPrivate.get(port.PrivatePort) ?? []), container.name]);
       });
     });
     mapPortPrivate.forEach((value, key) => {
@@ -200,7 +199,7 @@ function updatePortExposure(port: number, checked: boolean) {
   <SolidPodIcon slot="icon" size="40" />
 
   <div class="min-w-full h-fit" slot="content">
-    <div class="m-5 p-6 bg-charcoal-800 rounded-sm text-gray-700">
+    <div class="mx-5 mb-5 p-6 bg-charcoal-800 rounded-sm text-gray-700">
       <div>
         {#if podCreation}
           {#if containersPorts.length > 0}

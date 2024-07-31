@@ -1,4 +1,5 @@
 <script lang="ts">
+import { SearchInput } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 import { type Unsubscriber } from 'svelte/store';
 
@@ -7,7 +8,6 @@ import { context } from '/@/stores/context';
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import Route from '../../Route.svelte';
 import type { ContextUI } from '../context/context';
-import SearchInput from '../ui/SearchInput.svelte';
 import PreferencesRenderingItem from './PreferencesRenderingItem.svelte';
 import SettingsPage from './SettingsPage.svelte';
 import { isDefaultScope, isPropertyValidInContext } from './Util';
@@ -31,8 +31,8 @@ $: matchingRecords = properties
     property =>
       !searchValue ||
       matchValue(property.title, searchValue) ||
-      (property.description && matchValue(property.description, searchValue)) ||
-      (property.markdownDescription && matchValue(property.markdownDescription, searchValue)),
+      (!!property.description && matchValue(property.description, searchValue)) ||
+      (!!property.markdownDescription && matchValue(property.markdownDescription, searchValue)),
   )
   .reduce((map, property) => {
     if (!map.has(property.parentId)) {
@@ -69,7 +69,7 @@ function updateSearchValue(event: any) {
 <Route path="/" breadcrumb="{key}">
   <SettingsPage title="Preferences">
     <SearchInput slot="header" title="preferences" class="mt-4" on:input="{e => updateSearchValue(e)}" />
-    <div class="flex flex-col space-y-5">
+    <div class="flex flex-col space-y-5 text-[var(--pd-content-header)]">
       {#if matchingRecords.size === 0}
         <div>No Settings Found</div>
       {:else}

@@ -1,5 +1,15 @@
 <script lang="ts">
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
+import {
+  Button,
+  FilteredEmptyScreen,
+  NavPage,
+  Table,
+  TableColumn,
+  TableDurationColumn,
+  TableRow,
+  TableSimpleColumn,
+} from '@podman-desktop/ui-svelte';
 import moment from 'moment';
 import { onMount } from 'svelte';
 
@@ -11,13 +21,6 @@ import {
 
 import DeploymentIcon from '../images/DeploymentIcon.svelte';
 import KubeApplyYamlButton from '../kube/KubeApplyYAMLButton.svelte';
-import DurationColumn from '../table/DurationColumn.svelte';
-import SimpleColumn from '../table/SimpleColumn.svelte';
-import { Column, Row } from '../table/table';
-import Table from '../table/Table.svelte';
-import Button from '../ui/Button.svelte';
-import FilteredEmptyScreen from '../ui/FilteredEmptyScreen.svelte';
-import NavPage from '../ui/NavPage.svelte';
 import { DeploymentUtils } from './deployment-utils';
 import DeploymentColumnActions from './DeploymentColumnActions.svelte';
 import DeploymentColumnConditions from './DeploymentColumnConditions.svelte';
@@ -68,52 +71,51 @@ async function deleteSelectedDeployments() {
 let selectedItemsNumber: number;
 let table: Table;
 
-let statusColumn = new Column<DeploymentUI>('Status', {
+let statusColumn = new TableColumn<DeploymentUI>('Status', {
   align: 'center',
   width: '70px',
   renderer: DeploymentColumnStatus,
   comparator: (a, b) => a.status.localeCompare(b.status),
 });
 
-let nameColumn = new Column<DeploymentUI>('Name', {
-  width: '2fr',
+let nameColumn = new TableColumn<DeploymentUI>('Name', {
   renderer: DeploymentColumnName,
   comparator: (a, b) => a.name.localeCompare(b.name),
 });
 
-let namespaceColumn = new Column<DeploymentUI, string>('Namespace', {
+let namespaceColumn = new TableColumn<DeploymentUI, string>('Namespace', {
   renderMapping: deployment => deployment.namespace,
-  renderer: SimpleColumn,
+  renderer: TableSimpleColumn,
   comparator: (a, b) => a.namespace.localeCompare(b.namespace),
 });
 
-let conditionsColumn = new Column<DeploymentUI>('Conditions', {
+let conditionsColumn = new TableColumn<DeploymentUI>('Conditions', {
   width: '2fr',
   overflow: true,
   renderer: DeploymentColumnConditions,
 });
 
-let podsColumn = new Column<DeploymentUI>('Pods', {
+let podsColumn = new TableColumn<DeploymentUI>('Pods', {
   renderer: DeploymentColumnPods,
 });
 
-let ageColumn = new Column<DeploymentUI, Date | undefined>('Age', {
+let ageColumn = new TableColumn<DeploymentUI, Date | undefined>('Age', {
   renderMapping: deployment => deployment.created,
-  renderer: DurationColumn,
+  renderer: TableDurationColumn,
   comparator: (a, b) => moment(b.created).diff(moment(a.created)),
 });
 
-const columns: Column<DeploymentUI, DeploymentUI | string | Date | undefined>[] = [
+const columns = [
   statusColumn,
   nameColumn,
   namespaceColumn,
   conditionsColumn,
   podsColumn,
   ageColumn,
-  new Column<DeploymentUI>('Actions', { align: 'right', renderer: DeploymentColumnActions }),
+  new TableColumn<DeploymentUI>('Actions', { align: 'right', renderer: DeploymentColumnActions }),
 ];
 
-const row = new Row<DeploymentUI>({ selectable: _deployment => true });
+const row = new TableRow<DeploymentUI>({ selectable: _deployment => true });
 </script>
 
 <NavPage bind:searchTerm="{searchTerm}" title="deployments">

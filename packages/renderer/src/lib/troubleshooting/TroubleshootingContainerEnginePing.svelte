@@ -1,10 +1,9 @@
 <script lang="ts">
 import { faSignal } from '@fortawesome/free-solid-svg-icons';
+import { Button, ErrorMessage } from '@podman-desktop/ui-svelte';
 import { Buffer } from 'buffer';
 
-import type { ProviderContainerConnectionInfo } from '../../../../main/src/plugin/api/provider-info';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
+import type { ProviderContainerConnectionInfo } from '/@api/provider-info';
 
 export let providerContainerEngine: ProviderContainerConnectionInfo;
 

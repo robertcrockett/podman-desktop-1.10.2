@@ -21,6 +21,7 @@ import { expect as playExpect } from '@playwright/test';
 
 import { handleConfirmationDialog } from '../../utility/operations';
 import { waitUntil, waitWhile } from '../../utility/wait';
+import type { ContainerInteractiveParams } from '../core/types';
 import { BuildImagePage } from './build-image-page';
 import type { ContainersPage } from './containers-page';
 import { ImageDetailsPage } from './image-details-page';
@@ -32,13 +33,19 @@ export class ImagesPage extends MainPage {
   readonly pruneImagesButton: Locator;
   readonly buildImageButton: Locator;
   readonly pruneConfirmationButton: Locator;
+  readonly loadImagesFromTarButton: Locator;
+  readonly addArchiveButton: Locator;
+  readonly confirmLoadImagesButton: Locator;
 
   constructor(page: Page) {
     super(page, 'images');
-    this.pullImageButton = this.additionalActions.getByRole('button', { name: 'Pull' });
-    this.pruneImagesButton = this.additionalActions.getByRole('button', { name: 'Prune' });
-    this.buildImageButton = this.additionalActions.getByRole('button', { name: 'Build' });
-    this.pruneConfirmationButton = this.page.getByRole('button', { name: 'Yes' });
+    this.pullImageButton = this.additionalActions.getByRole('button', { name: 'Pull', exact: true });
+    this.pruneImagesButton = this.additionalActions.getByRole('button', { name: 'Prune', exact: true });
+    this.buildImageButton = this.additionalActions.getByRole('button', { name: 'Build', exact: true });
+    this.pruneConfirmationButton = this.page.getByRole('button', { name: 'Yes', exact: true });
+    this.loadImagesFromTarButton = this.additionalActions.getByLabel('Load Images', { exact: true });
+    this.addArchiveButton = this.page.getByRole('button', { name: 'Add archive', exact: true });
+    this.confirmLoadImagesButton = this.page.getByRole('button', { name: 'Load Images', exact: true });
   }
 
   async openPullImage(): Promise<PullImagePage> {
@@ -66,10 +73,14 @@ export class ImagesPage extends MainPage {
     return await editImagePage.renameImage(newname);
   }
 
-  async startContainerWithImage(image: string, containerName: string): Promise<ContainersPage> {
+  async startContainerWithImage(
+    image: string,
+    containerName: string,
+    containersParams?: ContainerInteractiveParams,
+  ): Promise<ContainersPage> {
     const imageDetails = await this.openImageDetails(image);
     const runImage = await imageDetails.openRunImage();
-    return await runImage.startContainer(containerName);
+    return await runImage.startContainer(containerName, containersParams);
   }
 
   async openImageDetails(name: string): Promise<ImageDetailsPage> {
@@ -125,5 +136,27 @@ export class ImagesPage extends MainPage {
   async waitForImageDelete(name: string, timeout = 5000): Promise<boolean> {
     await waitWhile(async () => await this.imageExists(name), timeout, 500);
     return true;
+  }
+
+  async getCurrentStatusOfImage(name: string): Promise<string> {
+    let status = '';
+    const row = await this.getImageRowByName(name);
+
+    if (row === undefined) throw new Error(`Image: '${name}' does not exist`);
+
+    status = status + (await row.getByRole('status').getAttribute('title'));
+    return status;
+  }
+
+  async loadImages(archivePath: string): Promise<ImagesPage> {
+    // TODO: Will probably require refactoring when https://github.com/containers/podman-desktop/issues/7620 is done
+
+    await playExpect(this.loadImagesFromTarButton).toBeEnabled();
+    await this.loadImagesFromTarButton.click();
+    await playExpect(this.addArchiveButton).toBeEnabled();
+    await this.addArchiveButton.setInputFiles(archivePath);
+    await playExpect(this.confirmLoadImagesButton).toBeEnabled();
+    await this.confirmLoadImagesButton.click();
+    return this;
   }
 }

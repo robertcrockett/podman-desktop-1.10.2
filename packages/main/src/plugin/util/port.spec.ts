@@ -81,9 +81,10 @@ test.each(hosts)(
 );
 
 test('return first empty port, no port is used', async () => {
-  const freePort = await port.getFreePort(20000);
+  const start = 21000 + Math.floor(Math.random() * 100);
+  const freePort = await port.getFreePort(start);
 
-  expect(freePort).toBe(20000);
+  expect(freePort).toBe(start);
   expect(await port.isFreePort(freePort)).toBe(true);
 });
 
@@ -132,14 +133,16 @@ test.each(hosts)(
   },
 );
 
-test('fails with range error if trying to get a port which is over upper range', async () => {
-  await expect(port.getFreePort(200000)).rejects.toThrowError(/options.port should be >= 0 and < 65536/);
-});
-
 test('fails with range error if value is over upper range', async () => {
-  await expect(port.isFreePort(200000)).rejects.toThrowError(/options.port should be >= 0 and < 65536/);
+  await expect(port.isFreePort(200000)).rejects.toThrowError(
+    /The port must have an integer value within the range from 1025 to 65535./,
+  );
 });
 
 test('fails with range error if value is less lower range', async () => {
-  await expect(port.isFreePort(-1)).rejects.toThrowError(/options.port should be >= 0 and < 65536/);
+  await expect(port.isFreePort(-1)).rejects.toThrowError(/The port must be greater than 1024./);
+});
+
+test('should return message that user is trying to check unprivileged port', async () => {
+  await expect(port.isFreePort(1)).rejects.toThrowError(/The port must be greater than 1024./);
 });

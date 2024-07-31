@@ -1,10 +1,11 @@
 <script lang="ts">
+import { NavPage } from '@podman-desktop/ui-svelte';
+
 import ProviderConfiguring from '/@/lib/dashboard/ProviderConfiguring.svelte';
 import ExtensionBanners from '/@/lib/recommendation/ExtensionBanners.svelte';
 
 import { providerInfos } from '../../stores/providers';
 import LearningCenter from '../learning-center/LearningCenter.svelte';
-import NavPage from '../ui/NavPage.svelte';
 import NotificationsBox from './NotificationsBox.svelte';
 import ProviderConfigured from './ProviderConfigured.svelte';
 import type { InitializationContext } from './ProviderInitUtils';
@@ -37,7 +38,7 @@ function getInitializationContext(id: string): InitializationContext {
 </script>
 
 <NavPage searchEnabled="{false}" title="Dashboard">
-  <div slot="content" class="flex flex-col min-w-full h-full bg-charcoal-700 shadow-nav py-5">
+  <div slot="content" class="flex flex-col min-w-full h-full bg-[var(--pd-content-bg)] shadow-nav py-5">
     <div class="min-w-full flex-1">
       <NotificationsBox />
       <div class="px-5 space-y-5 h-full">

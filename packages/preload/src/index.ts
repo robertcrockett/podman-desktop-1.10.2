@@ -30,6 +30,8 @@ import type {
   V1Deployment,
   V1Ingress,
   V1NamespaceList,
+  V1Node,
+  V1PersistentVolumeClaim,
   V1Pod,
   V1PodList,
   V1Service,
@@ -37,10 +39,9 @@ import type {
 import type * as containerDesktopAPI from '@podman-desktop/api';
 import { contextBridge, ipcRenderer } from 'electron';
 
-import type { ApiSenderType } from '../../main/src/plugin/api';
-import type { CliToolInfo } from '../../main/src/plugin/api/cli-tool-info';
-import type { ColorInfo } from '../../main/src/plugin/api/color-info';
-import type { CommandInfo } from '../../main/src/plugin/api/command-info';
+import type { CliToolInfo } from '/@api/cli-tool-info';
+import type { ColorInfo } from '/@api/color-info';
+import type { CommandInfo } from '/@api/command-info';
 import type {
   ContainerCreateOptions,
   ContainerExportOptions,
@@ -50,35 +51,37 @@ import type {
   ImagesSaveOptions,
   SimpleContainerInfo,
   VolumeCreateOptions,
-} from '../../main/src/plugin/api/container-info';
-import type { ContainerInspectInfo } from '../../main/src/plugin/api/container-inspect-info';
-import type { ContainerStatsInfo } from '../../main/src/plugin/api/container-stats-info';
-import type { ContextInfo } from '../../main/src/plugin/api/context-info';
-import type { ContributionInfo } from '../../main/src/plugin/api/contribution-info';
-import type { ExtensionInfo } from '../../main/src/plugin/api/extension-info';
-import type { HistoryInfo } from '../../main/src/plugin/api/history-info';
-import type { IconInfo } from '../../main/src/plugin/api/icon-info';
-import type { ImageCheckerInfo } from '../../main/src/plugin/api/image-checker-info';
-import type { ImageInfo } from '../../main/src/plugin/api/image-info';
-import type { ImageInspectInfo } from '../../main/src/plugin/api/image-inspect-info';
-import type { KubernetesGeneratorInfo } from '../../main/src/plugin/api/KubernetesGeneratorInfo';
-import type { ManifestCreateOptions, ManifestInspectInfo } from '../../main/src/plugin/api/manifest-info';
-import type { NetworkInspectInfo } from '../../main/src/plugin/api/network-info';
-import type { NotificationCard, NotificationCardOptions } from '../../main/src/plugin/api/notification';
-import type { OnboardingInfo, OnboardingStatus } from '../../main/src/plugin/api/onboarding';
-import type { V1Route } from '../../main/src/plugin/api/openshift-types';
-import type { PodCreateOptions, PodInfo, PodInspectInfo } from '../../main/src/plugin/api/pod-info';
+} from '/@api/container-info';
+import type { ContainerInspectInfo } from '/@api/container-inspect-info';
+import type { ContainerStatsInfo } from '/@api/container-stats-info';
+import type { ContributionInfo } from '/@api/contribution-info';
+import type { ExtensionInfo } from '/@api/extension-info';
+import type { HistoryInfo } from '/@api/history-info';
+import type { IconInfo } from '/@api/icon-info';
+import type { ImageCheckerInfo } from '/@api/image-checker-info';
+import type { ImageInfo } from '/@api/image-info';
+import type { ImageInspectInfo } from '/@api/image-inspect-info';
+import type { ManifestCreateOptions, ManifestInspectInfo } from '/@api/manifest-info';
+import type { NetworkInspectInfo } from '/@api/network-info';
+import type { NotificationCard, NotificationCardOptions } from '/@api/notification';
+import type { OnboardingInfo, OnboardingStatus } from '/@api/onboarding';
+import type { V1Route } from '/@api/openshift-types';
 import type {
   PreflightCheckEvent,
   PreflightChecksCallback,
   ProviderContainerConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
-} from '../../main/src/plugin/api/provider-info';
-import type { PullEvent } from '../../main/src/plugin/api/pull-event';
-import type { ViewInfoUI } from '../../main/src/plugin/api/view-info';
-import type { VolumeInspectInfo, VolumeListInfo } from '../../main/src/plugin/api/volume-info';
-import type { WebviewInfo } from '../../main/src/plugin/api/webview-info';
+} from '/@api/provider-info';
+import type { PullEvent } from '/@api/pull-event';
+import type { ViewInfoUI } from '/@api/view-info';
+import type { VolumeInspectInfo, VolumeListInfo } from '/@api/volume-info';
+import type { WebviewInfo } from '/@api/webview-info';
+
+import type { ApiSenderType } from '../../main/src/plugin/api';
+import type { ContextInfo } from '../../main/src/plugin/api/context-info';
+import type { KubernetesGeneratorInfo } from '../../main/src/plugin/api/KubernetesGeneratorInfo';
+import type { PodCreateOptions, PodInfo, PodInspectInfo } from '../../main/src/plugin/api/pod-info';
 import type { AuthenticationProviderInfo } from '../../main/src/plugin/authentication';
 import type { IConfigurationPropertyRecordedSchema } from '../../main/src/plugin/configuration-registry';
 import type {
@@ -1057,6 +1060,7 @@ export function initExposure(): void {
       key: symbol,
       eventCollect: (key: symbol, eventName: 'finish' | 'stream' | 'error', data: string) => void,
       cancellableTokenId?: number,
+      buildargs?: { [key: string]: string },
     ): Promise<unknown> => {
       onDataCallbacksBuildImageId++;
       onDataCallbacksBuildImage.set(onDataCallbacksBuildImageId, eventCollect);
@@ -1070,6 +1074,7 @@ export function initExposure(): void {
         selectedProvider,
         onDataCallbacksBuildImageId,
         cancellableTokenId,
+        buildargs,
       );
     },
   );
@@ -1298,7 +1303,7 @@ export function initExposure(): void {
   });
 
   contextBridge.exposeInMainWorld('stopExtension', async (extensionId: string): Promise<void> => {
-    return ipcInvoke('extension-loader:deactivateExtension', extensionId);
+    return ipcInvoke('extension-loader:stopExtension', extensionId);
   });
 
   contextBridge.exposeInMainWorld('startExtension', async (extensionId: string): Promise<void> => {
@@ -1674,6 +1679,17 @@ export function initExposure(): void {
   );
 
   contextBridge.exposeInMainWorld(
+    'kubernetesReadNamespacedPersistentVolumeClaim',
+    async (name: string, namespace: string): Promise<V1PersistentVolumeClaim | undefined> => {
+      return ipcInvoke('kubernetes-client:readNamespacedPersistentVolumeClaim', name, namespace);
+    },
+  );
+
+  contextBridge.exposeInMainWorld('kubernetesReadNode', async (name: string): Promise<V1Node | undefined> => {
+    return ipcInvoke('kubernetes-client:readNode', name);
+  });
+
+  contextBridge.exposeInMainWorld(
     'kubernetesReadNamespacedIngress',
     async (name: string, namespace: string): Promise<V1Ingress | undefined> => {
       return ipcInvoke('kubernetes-client:readNamespacedIngress', name, namespace);
@@ -1768,6 +1784,10 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('kubernetesDeleteDeployment', async (name: string): Promise<void> => {
     return ipcInvoke('kubernetes-client:deleteDeployment', name);
+  });
+
+  contextBridge.exposeInMainWorld('kubernetesDeletePersistentVolumeClaim', async (name: string): Promise<void> => {
+    return ipcInvoke('kubernetes-client:deletePersistentVolumeClaim', name);
   });
 
   contextBridge.exposeInMainWorld('kubernetesDeleteIngress', async (name: string): Promise<void> => {

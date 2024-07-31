@@ -42,11 +42,10 @@ test('Expect simple column styling', async () => {
     status: 'UNUSED',
     icon: ImageIcon,
     badges: [],
+    digest: 'sha256:1234567890',
   };
   render(ImageColumnEnvironment, { object: image });
 
   const text = screen.getByText(image.engineName);
   expect(text).toBeInTheDocument();
-  expect(text).toHaveClass('text-xs');
-  expect(text).toHaveClass('capitalize');
 });

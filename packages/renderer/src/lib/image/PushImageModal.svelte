@@ -1,17 +1,13 @@
 <script lang="ts">
 import { faCheckCircle, faCircleArrowUp, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { Button, CloseButton, Link, Modal } from '@podman-desktop/ui-svelte';
 import { onMount, tick } from 'svelte';
 import Fa from 'svelte-fa';
 import { router } from 'tinro';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
-import CloseButton from '/@/lib/ui/CloseButton.svelte';
-
 import { TerminalSettings } from '../../../../main/src/plugin/terminal-settings';
-import Modal from '../dialogs/Modal.svelte';
-import Button from '../ui/Button.svelte';
-import Link from '../ui/Link.svelte';
 import type { ImageInfoUI } from './ImageInfoUI';
 
 export let closeCallback: () => void;
@@ -116,8 +112,9 @@ $: window.hasAuthconfigForImage(imageInfoToPush.name).then(result => (isAuthenti
   on:close="{() => {
     closeCallback();
   }}">
-  <div class="modal flex flex-col place-self-center bg-charcoal-800 shadow-xl shadow-black">
-    <div class="flex items-center justify-between px-6 py-5 space-x-2">
+  <div class="modal flex flex-col place-self-center">
+    <div
+      class="flex items-center justify-between px-6 py-5 space-x-2 text-[var(--pd-modal-header-text)] bg-[var(--pd-modal-header-bg)]">
       <h1 class="grow text-lg font-bold">Push image</h1>
 
       <CloseButton on:click="{() => closeCallback()}" />
@@ -125,7 +122,7 @@ $: window.hasAuthconfigForImage(imageInfoToPush.name).then(result => (isAuthenti
 
     <div class="flex flex-col px-6 py-4 pt-0 text-sm leading-5 space-y-5">
       <div class="pb-4">
-        <label for="modalImageTag" class="block mb-2 text-sm font-medium text-gray-400">Image tag</label>
+        <label for="modalImageTag" class="block mb-2 text-sm font-medium text-[var(--pd-modal-text)]">Image tag</label>
         {#if isAuthenticatedForThisImage}
           <Fa class="absolute mt-3 ml-1.5 text-green-300" size="1x" icon="{faCheckCircle}" />
         {:else}
@@ -146,7 +143,7 @@ $: window.hasAuthconfigForImage(imageInfoToPush.name).then(result => (isAuthenti
         and to click to go to the registries page -->
         {#if !isAuthenticatedForThisImage}
           <p class="text-amber-500 pt-1">
-            No registry with push permissions found. <Link internalRef="/preferences/registries"
+            No registry with push permissions found. <Link on:click="{() => router.goto('/preferences/registries')}"
               >Add a registry now.</Link>
           </p>{/if}
       </div>

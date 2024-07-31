@@ -1,12 +1,11 @@
 <script lang="ts">
 /* eslint-disable import/no-duplicates */
 // https://github.com/import-js/eslint-plugin-import/issues/1479
+import { Tooltip } from '@podman-desktop/ui-svelte';
 import { getContext, onDestroy, onMount } from 'svelte';
 import type { MouseEventHandler } from 'svelte/elements';
 import type { Writable } from 'svelte/store';
 import type { TinroRouteMeta } from 'tinro';
-
-import Tooltip from './Tooltip.svelte';
 /* eslint-disable import/no-duplicates */
 
 export let href: string;
@@ -50,7 +49,7 @@ onDestroy(() => {
     class:hover:text-[color:var(--pd-global-nav-icon-hover)]="{!selected || inSection}"
     class:hover:bg-[var(--pd-global-nav-icon-hover-bg)]="{!selected || inSection}"
     class:hover:border-[var(--pd-global-nav-icon-hover-bg)]="{!selected && !inSection}">
-    <Tooltip tip="{tooltip}" right>
+    <Tooltip right tip="{tooltip}">
       <slot />
     </Tooltip>
   </div>

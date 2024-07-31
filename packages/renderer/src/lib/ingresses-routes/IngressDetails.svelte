@@ -1,18 +1,20 @@
 <script lang="ts">
 import type { V1Ingress } from '@kubernetes/client-node';
+import { Tab } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
+import { router } from 'tinro';
 import { stringify } from 'yaml';
 
 import { kubernetesCurrentContextIngresses } from '/@/stores/kubernetes-contexts-state';
 
 import Route from '../../Route.svelte';
 import MonacoEditor from '../editor/MonacoEditor.svelte';
-import ServiceIcon from '../images/ServiceIcon.svelte';
+import IngressRouteIcon from '../images/IngressRouteIcon.svelte';
 import StatusIcon from '../images/StatusIcon.svelte';
 import KubeEditYAML from '../kube/KubeEditYAML.svelte';
 import DetailsPage from '../ui/DetailsPage.svelte';
 import StateChange from '../ui/StateChange.svelte';
-import Tab from '../ui/Tab.svelte';
+import { getTabUrl, isTabSelected } from '../ui/Util';
 import { IngressRouteUtils } from './ingress-route-utils';
 import IngressRouteActions from './IngressRouteActions.svelte';
 import ServiceDetailsSummary from './IngressRouteDetailsSummary.svelte';
@@ -57,7 +59,7 @@ async function loadIngressDetails() {
 
 {#if ingressUI}
   <DetailsPage title="{ingressUI.name}" subtitle="{ingressUI.namespace}" bind:this="{detailsPage}">
-    <StatusIcon slot="icon" icon="{ServiceIcon}" size="{24}" status="{ingressUI.status}" />
+    <StatusIcon slot="icon" icon="{IngressRouteIcon}" size="{24}" status="{ingressUI.status}" />
     <svelte:fragment slot="actions">
       <IngressRouteActions ingressRoute="{ingressUI}" detailed="{true}" on:update="{() => (ingressUI = ingressUI)}" />
     </svelte:fragment>
@@ -65,9 +67,15 @@ async function loadIngressDetails() {
       <StateChange state="{ingressUI.status}" />
     </div>
     <svelte:fragment slot="tabs">
-      <Tab title="Summary" url="summary" />
-      <Tab title="Inspect" url="inspect" />
-      <Tab title="Kube" url="kube" />
+      <Tab
+        title="Summary"
+        selected="{isTabSelected($router.path, 'summary')}"
+        url="{getTabUrl($router.path, 'summary')}" />
+      <Tab
+        title="Inspect"
+        selected="{isTabSelected($router.path, 'inspect')}"
+        url="{getTabUrl($router.path, 'inspect')}" />
+      <Tab title="Kube" selected="{isTabSelected($router.path, 'kube')}" url="{getTabUrl($router.path, 'kube')}" />
     </svelte:fragment>
     <svelte:fragment slot="content">
       <Route path="/summary" breadcrumb="Summary" navigationHint="tab">

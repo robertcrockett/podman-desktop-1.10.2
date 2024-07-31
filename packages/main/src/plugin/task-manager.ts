@@ -16,9 +16,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import type { NotificationInfo } from '/@api/notification.js';
+import type { NotificationTask, StatefulTask, Task } from '/@api/task.js';
+
 import type { ApiSenderType } from './api.js';
-import type { NotificationInfo } from './api/notification.js';
-import type { NotificationTask, StatefulTask, Task } from './api/task.js';
 import type { CommandRegistry } from './command-registry.js';
 import type { StatusBarRegistry } from './statusbar/statusbar-registry.js';
 
@@ -38,6 +39,15 @@ export class TaskManager {
 
   public init(): void {
     // The TaskManager is responsible for creating the entry he will be using
+    this.setStatusBarEntry(false);
+
+    this.commandRegistry.registerCommand('show-task-manager', () => {
+      this.apiSender.send('toggle-task-manager', '');
+      this.setStatusBarEntry(false);
+    });
+  }
+
+  private setStatusBarEntry(highlight: boolean): void {
     this.statusBarRegistry.setEntry(
       'tasks',
       false,
@@ -48,11 +58,8 @@ export class TaskManager {
       true,
       'show-task-manager',
       undefined,
+      highlight,
     );
-
-    this.commandRegistry.registerCommand('show-task-manager', () => {
-      this.apiSender.send('toggle-task-manager', '');
-    });
   }
 
   public createTask(title: string | undefined): StatefulTask {
@@ -66,6 +73,7 @@ export class TaskManager {
     };
     this.tasks.set(task.id, task);
     this.apiSender.send('task-created', task);
+    this.setStatusBarEntry(true);
     return task;
   }
 
@@ -75,11 +83,12 @@ export class TaskManager {
       id: `main-${this.taskId}`,
       name: notificationInfo.title,
       started: new Date().getTime(),
-      description: notificationInfo.body || '',
+      description: notificationInfo.body ?? '',
       markdownActions: notificationInfo.markdownActions,
     };
     this.tasks.set(task.id, task);
     this.apiSender.send('task-created', task);
+    this.setStatusBarEntry(true);
     return task;
   }
 

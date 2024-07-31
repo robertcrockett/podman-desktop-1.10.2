@@ -6,12 +6,12 @@ import type { Unsubscriber } from 'svelte/store';
 import PreferencesConnectionCreationRendering from '/@/lib/preferences/PreferencesConnectionCreationOrEditRendering.svelte';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import WarningMessage from '/@/lib/ui/WarningMessage.svelte';
-
 import type {
   ProviderContainerConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
-} from '../../../../main/src/plugin/api/provider-info';
+} from '/@api/provider-info';
+
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import { providerInfos } from '../../stores/providers';
 import IconImage from '../appearance/IconImage.svelte';
@@ -29,7 +29,7 @@ let providersUnsubscribe: Unsubscriber;
 onMount(async () => {
   providersUnsubscribe = providerInfos.subscribe(providerInfosValue => {
     const providers = providerInfosValue;
-    const connectionName = Buffer.from(name || '', 'base64').toString();
+    const connectionName = Buffer.from(name ?? '', 'base64').toString();
     providerInfo = providers.filter(provider => provider.internalId === providerInternalId)[0];
     connectionInfo = providerInfo.containerConnections.filter(connection => connection.name === connectionName)[0];
   });
@@ -55,14 +55,14 @@ async function editConnection(
 
 {#if providerInfo && connectionInfo}
   <DetailsPage title="{connectionInfo.name}">
-    <svelte:fragment slot="content">
+    <div slot="content" class="text-[var(--pd-content-text)]">
       <PreferencesConnectionCreationRendering
         providerInfo="{providerInfo}"
         connectionInfo="{connectionInfo}"
         properties="{properties}"
         propertyScope="{scope}"
         callback="{editConnection}" />
-    </svelte:fragment>
+    </div>
     <IconImage slot="icon" image="{providerInfo?.images?.icon}" alt="{providerInfo?.name}" class="max-h-10" />
     <svelte:fragment slot="subtitle">
       {#if connectionInfo.status === 'started'}

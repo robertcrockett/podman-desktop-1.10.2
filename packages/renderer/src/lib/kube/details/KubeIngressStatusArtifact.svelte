@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { V1IngressStatus } from '@kubernetes/client-node';
 
-import Cell from './ui/Cell.svelte';
-import Title from './ui/Title.svelte';
+import Cell from '/@/lib/details/DetailsCell.svelte';
+import Title from '/@/lib/details/DetailsTitle.svelte';
 
 export let artifact: V1IngressStatus | undefined;
 </script>
@@ -17,7 +17,7 @@ export let artifact: V1IngressStatus | undefined;
     <Cell>Load Balancer</Cell>
     <Cell>
       {#each artifact.loadBalancer?.ingress as ingress}
-        <div>{ingress.ip || ingress.hostname}</div>
+        <div>{ingress.ip ?? ingress.hostname}</div>
       {/each}
     </Cell>
   </tr>

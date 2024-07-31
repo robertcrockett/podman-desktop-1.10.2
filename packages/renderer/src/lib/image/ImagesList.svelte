@@ -1,5 +1,14 @@
 <script lang="ts">
 import { faArrowCircleDown, faCube, faDownload, faTrash, faUpload } from '@fortawesome/free-solid-svg-icons';
+import {
+  Button,
+  FilteredEmptyScreen,
+  NavPage,
+  Table,
+  TableColumn,
+  TableRow,
+  TableSimpleColumn,
+} from '@podman-desktop/ui-svelte';
 import moment from 'moment';
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/store';
@@ -7,10 +16,10 @@ import { router } from 'tinro';
 
 import { saveImagesInfo } from '/@/stores/save-images-store';
 import { viewsContributions } from '/@/stores/views';
+import type { ContainerInfo } from '/@api/container-info';
+import type { ImageInfo } from '/@api/image-info';
+import type { ViewInfoUI } from '/@api/view-info';
 
-import type { ContainerInfo } from '../../../../main/src/plugin/api/container-info';
-import type { ImageInfo } from '../../../../main/src/plugin/api/image-info';
-import type { ViewInfoUI } from '../../../../main/src/plugin/api/view-info';
 import { containersInfos } from '../../stores/containers';
 import { context } from '../../stores/context';
 import { filtered, imagesInfos, searchPattern } from '../../stores/images';
@@ -19,18 +28,11 @@ import type { ContextUI } from '../context/context';
 import type { EngineInfoUI } from '../engine/EngineInfoUI';
 import Prune from '../engine/Prune.svelte';
 import ImageIcon from '../images/ImageIcon.svelte';
-import { Column, Row } from '../table/table';
-import Table from '../table/Table.svelte';
-import Button from '../ui/Button.svelte';
-import FilteredEmptyScreen from '../ui/FilteredEmptyScreen.svelte';
-import NavPage from '../ui/NavPage.svelte';
 import { IMAGE_LIST_VIEW_BADGES, IMAGE_LIST_VIEW_ICONS, IMAGE_VIEW_BADGES, IMAGE_VIEW_ICONS } from '../view/views';
 import { ImageUtils } from './image-utils';
 import ImageColumnActions from './ImageColumnActions.svelte';
-import ImageColumnAge from './ImageColumnAge.svelte';
 import ImageColumnEnvironment from './ImageColumnEnvironment.svelte';
 import ImageColumnName from './ImageColumnName.svelte';
-import ImageColumnSize from './ImageColumnSize.svelte';
 import ImageColumnStatus from './ImageColumnStatus.svelte';
 import ImageEmptyScreen from './ImageEmptyScreen.svelte';
 import type { ImageInfoUI } from './ImageInfoUI';
@@ -55,7 +57,7 @@ let viewContributions: ViewInfoUI[] = [];
 function updateImages(globalContext: ContextUI) {
   const computedImages = storeImages
     .map((imageInfo: ImageInfo) =>
-      imageUtils.getImagesInfoUI(imageInfo, storeContainers, globalContext, viewContributions),
+      imageUtils.getImagesInfoUI(imageInfo, storeContainers, globalContext, viewContributions, storeImages),
     )
     .flat();
 
@@ -69,6 +71,20 @@ function updateImages(globalContext: ContextUI) {
     }
   });
   computedImages.sort((first, second) => second.createdAt - first.createdAt);
+
+  // Go through each image and if it has a children, remove the "children" from computedImages so they do not show up
+  // in the table
+  computedImages.forEach(image => {
+    if (image.children) {
+      image.children.forEach(child => {
+        const index = computedImages.findIndex(computedImage => computedImage.id === child.id);
+        if (index !== -1) {
+          computedImages.splice(index, 1);
+        }
+      });
+    }
+  });
+
   images = computedImages;
 
   // Map engineName, engineId and engineType from currentContainers to EngineInfoUI[]
@@ -247,47 +263,58 @@ function computeInterval(): number {
 let selectedItemsNumber: number;
 let table: Table;
 
-let statusColumn = new Column<ImageInfoUI>('Status', {
+let statusColumn = new TableColumn<ImageInfoUI>('Status', {
   align: 'center',
   width: '70px',
   renderer: ImageColumnStatus,
   comparator: (a, b) => b.status.localeCompare(a.status),
 });
 
-let nameColumn = new Column<ImageInfoUI>('Name', {
+let nameColumn = new TableColumn<ImageInfoUI>('Name', {
   width: '4fr',
   renderer: ImageColumnName,
   comparator: (a, b) => a.name.localeCompare(b.name),
 });
 
-let envColumn = new Column<ImageInfoUI>('Environment', {
+let envColumn = new TableColumn<ImageInfoUI>('Environment', {
   renderer: ImageColumnEnvironment,
   comparator: (a, b) => a.engineName.localeCompare(b.engineName),
 });
 
-let ageColumn = new Column<ImageInfoUI>('Age', {
-  renderer: ImageColumnAge,
+let ageColumn = new TableColumn<ImageInfoUI, string>('Age', {
+  renderMapping: image => image.age,
+  renderer: TableSimpleColumn,
   comparator: (a, b) => moment().diff(moment.unix(a.createdAt)) - moment().diff(moment.unix(b.createdAt)),
 });
 
-let sizeColumn = new Column<ImageInfoUI>('Size', {
+let sizeColumn = new TableColumn<ImageInfoUI, string>('Size', {
   align: 'right',
-  renderer: ImageColumnSize,
+  renderMapping: image => image.humanSize,
+  renderer: TableSimpleColumn,
   comparator: (a, b) => b.size - a.size,
 });
 
-const columns: Column<ImageInfoUI>[] = [
+const columns = [
   statusColumn,
   nameColumn,
   envColumn,
   ageColumn,
   sizeColumn,
-  new Column<ImageInfoUI>('Actions', { align: 'right', width: '150px', renderer: ImageColumnActions, overflow: true }),
+  new TableColumn<ImageInfoUI>('Actions', {
+    align: 'right',
+    width: '150px',
+    renderer: ImageColumnActions,
+    overflow: true,
+  }),
 ];
 
-const row = new Row<ImageInfoUI>({
-  selectable: image => image.status === 'UNUSED',
+const row = new TableRow<ImageInfoUI>({
+  // If it is a manifest, it is not selectable (no delete functionality yet)
+  selectable: image => image.status === 'UNUSED' && !image.isManifest,
   disabledText: 'Image is used by a container',
+  children: image => {
+    return image.children ?? [];
+  },
 });
 </script>
 

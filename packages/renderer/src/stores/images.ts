@@ -19,7 +19,8 @@
 import type { Writable } from 'svelte/store';
 import { derived, writable } from 'svelte/store';
 
-import type { ImageInfo } from '../../../main/src/plugin/api/image-info';
+import type { ImageInfo } from '/@api/image-info';
+
 import ImageIcon from '../lib/images/ImageIcon.svelte';
 import { EventStore } from './event-store';
 import { findMatchInLeaves } from './search-util';
@@ -72,9 +73,5 @@ imagesEventStore.setupWithDebounce();
 export const searchPattern = writable('');
 
 export const filtered = derived([searchPattern, imagesInfos], ([$searchPattern, $imagesInfos]) =>
-  // We ignore any images that are manifest images as we do not support this yet in the UI.
-  // see epic issue: https://github.com/containers/podman-desktop/issues/6529
-  // If the image has isManifest and it is set to true, we ignore it.
-  // If isManifest is missing, it is most likely a compatibility API image and we still show it.
-  $imagesInfos.filter(imageInfo => !imageInfo.isManifest && findMatchInLeaves(imageInfo, $searchPattern.toLowerCase())),
+  $imagesInfos.filter(imageInfo => findMatchInLeaves(imageInfo, $searchPattern.toLowerCase())),
 );

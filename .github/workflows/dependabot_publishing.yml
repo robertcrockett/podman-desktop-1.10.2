@@ -5,10 +5,10 @@ name: Dependabot-Publish-Alerts
 on:
   push:
     branches:
-      - main
+      - 1.11.1
   pull_request:
     branches:
-      - main
+      - 1.11.1
 jobs:
   dependabot-alert-export:
     runs-on: ubuntu-latest

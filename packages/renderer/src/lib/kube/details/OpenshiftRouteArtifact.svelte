@@ -1,8 +1,9 @@
 <script lang="ts">
-import type { V1Route } from '../../../../../main/src/plugin/api/openshift-types';
-import Link from '../../ui/Link.svelte';
-import Cell from './ui/Cell.svelte';
-import Title from './ui/Title.svelte';
+import { Link } from '@podman-desktop/ui-svelte';
+
+import Cell from '/@/lib/details/DetailsCell.svelte';
+import Title from '/@/lib/details/DetailsTitle.svelte';
+import type { V1Route } from '/@api/openshift-types';
 
 // Assuming V1Route type is imported or defined elsewhere
 export let artifact: V1Route | undefined;
@@ -24,7 +25,7 @@ export let artifact: V1Route | undefined;
     <tr>
       <Cell>Path</Cell>
       <Cell>
-        {artifact.spec.path || 'N/A'}
+        {artifact.spec.path ?? 'N/A'}
       </Cell>
     </tr>
   {/if}
@@ -65,8 +66,9 @@ export let artifact: V1Route | undefined;
     <tr>
       <Cell>Link</Cell>
       <Cell>
-        <Link externalRef="{artifact.spec.tls ? 'https' : 'http'}://{artifact.spec.host}{artifact.spec.path || ''}">
-          {artifact.spec.tls ? 'https' : 'http'}://{artifact.spec.host}{artifact.spec.path || ''}
+        {@const link = `${artifact.spec.tls ? 'https' : 'http'}://${artifact.spec.host}${artifact.spec.path ?? ''}`}
+        <Link on:click="{() => window.openExternal(link)}">
+          {link}
         </Link>
       </Cell>
     </tr>

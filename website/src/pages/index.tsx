@@ -19,6 +19,7 @@ import Layout from '@theme/Layout';
 import ThemedImage from '@theme/ThemedImage';
 import React from 'react';
 
+import PodmanAILabBanner from '../components/PodmanAILabBanner';
 import TailWindThemeSelector from '../components/TailWindThemeSelector';
 
 function DownloadClientLinks(): JSX.Element {
@@ -133,7 +134,7 @@ function Hero(): JSX.Element {
   );
 }
 
-function SectionTitle(props): JSX.Element {
+function SectionTitle(props: { name: string }): JSX.Element {
   return (
     <div>
       <p className="inline-block px-3 py-px mb-4 text-xs font-semibold tracking-wider text-purple-800 uppercase rounded-full dark:bg-purple-400 bg-purple-400">
@@ -650,6 +651,7 @@ export default function Home(): JSX.Element {
       title="Podman Desktop - Containers and Kubernetes"
       description="Podman Desktop - An open source graphical tool for developing on containers and Kubernetes">
       <TailWindThemeSelector />
+      <PodmanAILabBanner />
       <Hero />
       <RunAnywhere />
       <MainFeatures />

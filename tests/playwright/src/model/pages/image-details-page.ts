@@ -19,8 +19,8 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect as playExpect } from '@playwright/test';
 
+import type { PodmanDesktopRunner } from '../../runner/podman-desktop-runner';
 import { handleConfirmationDialog } from '../../utility/operations';
-import { waitUntil } from '../../utility/wait';
 import { BasePage } from './base-page';
 import { ImageEditPage } from './image-edit-page';
 import { ImagesPage } from './images-page';
@@ -40,6 +40,10 @@ export class ImageDetailsPage extends BasePage {
   readonly backToImagesLink: Locator;
   readonly actionsButton: Locator;
   readonly buildDiskImageButton: Locator;
+  readonly saveImagebutton: Locator;
+  readonly saveImageInput: Locator;
+  readonly confirmSaveImages: Locator;
+  readonly browseButton: Locator;
 
   constructor(page: Page, name: string) {
     super(page);
@@ -56,59 +60,68 @@ export class ImageDetailsPage extends BasePage {
     this.backToImagesLink = page.getByRole('link', { name: 'Go back to Images' });
     this.actionsButton = page.getByRole('button', { name: 'kebab menu' });
     this.buildDiskImageButton = page.getByTitle('Build Disk Image');
+    this.saveImagebutton = page.getByRole('button', { name: 'Save Image', exact: true });
+    this.saveImageInput = page.locator('#input-output-directory');
+    this.confirmSaveImages = page.getByLabel('Save images', { exact: true });
+    this.browseButton = page.getByLabel('Select output folder');
   }
 
   async openRunImage(): Promise<RunImagePage> {
-    await waitUntil(async () => await this.runImageButton.isEnabled(), 5000, 500);
+    await playExpect(this.runImageButton).toBeEnabled({ timeout: 30000 });
     await this.runImageButton.click();
     return new RunImagePage(this.page, this.imageName);
   }
 
   async openEditImage(): Promise<ImageEditPage> {
+    await playExpect(this.editButton).toBeEnabled({ timeout: 30000 });
     await this.editButton.click();
     return new ImageEditPage(this.page, this.imageName);
   }
 
   async deleteImage(): Promise<ImagesPage> {
-    await waitUntil(async () => await this.deleteButton.isEnabled(), 15000, 500);
+    await playExpect(this.deleteButton).toBeEnabled({ timeout: 30000 });
     await this.deleteButton.click();
     await handleConfirmationDialog(this.page);
     return new ImagesPage(this.page);
   }
 
-  async buildDiskImage(type: string, architecture: string, pathToStore: string): Promise<boolean> {
-    let result = false;
+  async buildDiskImage(pdRunner: PodmanDesktopRunner): Promise<[Page, Page]> {
+    await this.actionsButton.click();
+    await playExpect(this.buildDiskImageButton).toBeEnabled();
+    await this.buildDiskImageButton.click();
 
-    try {
-      await this.actionsButton.click();
-      await playExpect(this.buildDiskImageButton).toBeEnabled();
-      await this.buildDiskImageButton.click();
+    const webView = this.page.getByRole('document', { name: 'Bootable Containers' });
+    await playExpect(webView).toBeVisible();
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const [mainPage, webViewPage] = pdRunner.getElectronApp().windows();
+    await mainPage.evaluate(() => {
+      const element = document.querySelector('webview');
+      if (element) {
+        (element as HTMLElement).focus();
+      } else {
+        console.log(`element is null`);
+      }
+    });
 
-      const typeButtonLocator = this.page.getByRole('button', { name: type });
-      await playExpect(typeButtonLocator).toBeEnabled();
-      await typeButtonLocator.click();
+    return [mainPage, webViewPage];
+  }
 
-      const architectureButtonLocator = this.page.getByRole('button', { name: architecture });
-      await playExpect(architectureButtonLocator).toBeEnabled();
-      await architectureButtonLocator.click();
-
-      const pathInputLocator = this.page.locator(`input[type='text']`);
-      await playExpect(pathInputLocator).toBeVisible();
-      await pathInputLocator.clear();
-      await pathInputLocator.fill(pathToStore);
-      await pathInputLocator.press('Enter');
-
-      const dialogLocator = this.page.getByRole('dialog', { name: 'Bootable Container', exact: true });
-      await playExpect.poll(async () => (await dialogLocator.count()) > 0, { timeout: 300000 }).toBeTruthy();
-
-      const dialogMessageLocator = this.page.getByLabel('Dialog Message');
-      result = (await dialogMessageLocator.innerText()).includes('Success!');
-    } finally {
-      const okButtonLocator = this.page.getByRole('button', { name: 'OK' });
-      await playExpect(okButtonLocator).toBeEnabled();
-      await okButtonLocator.click();
+  async saveImage(outputPath: string): Promise<ImagesPage> {
+    if (!outputPath) {
+      throw Error(`Path is incorrect or not provided!`);
     }
+    // TODO: Will probably require refactoring when https://github.com/containers/podman-desktop/issues/7620 is done
+    await playExpect(this.saveImagebutton).toBeEnabled();
+    await this.saveImagebutton.click();
+    await playExpect(this.saveImageInput).toBeVisible();
+    await playExpect(this.confirmSaveImages).toBeVisible();
 
-    return result;
+    await this.saveImageInput.evaluate(node => node.removeAttribute('readonly'));
+    await this.confirmSaveImages.evaluate(node => node.removeAttribute('disabled'));
+
+    await this.saveImageInput.pressSequentially(outputPath, { delay: 10 });
+    await this.confirmSaveImages.click();
+
+    return new ImagesPage(this.page);
   }
 }

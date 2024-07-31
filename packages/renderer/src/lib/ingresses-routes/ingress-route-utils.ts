@@ -18,7 +18,8 @@
 
 import type { V1Ingress } from '@kubernetes/client-node';
 
-import type { V1Route } from '../../../../main/src/plugin/api/openshift-types';
+import type { V1Route } from '/@api/openshift-types';
+
 import type { IngressUI } from './IngressUI';
 import type { RouteUI } from './RouteUI';
 
@@ -30,17 +31,18 @@ export interface HostPathObject {
 export class IngressRouteUtils {
   getIngressUI(ingress: V1Ingress): IngressUI {
     return {
-      name: ingress.metadata?.name || '',
-      namespace: ingress.metadata?.namespace || '',
+      name: ingress.metadata?.name ?? '',
+      namespace: ingress.metadata?.namespace ?? '',
       status: 'RUNNING',
       rules: ingress.spec?.rules,
       selected: false,
+      created: ingress.metadata?.creationTimestamp ? new Date(ingress.metadata.creationTimestamp) : undefined,
     };
   }
   getRouteUI(route: V1Route): RouteUI {
     return {
-      name: route.metadata?.name || '',
-      namespace: route.metadata?.namespace || '',
+      name: route.metadata?.name ?? '',
+      namespace: route.metadata?.namespace ?? '',
       status: 'RUNNING',
       host: route.spec.host,
       port: route.spec.port?.targetPort,
@@ -52,6 +54,7 @@ export class IngressRouteUtils {
       selected: false,
       // true if tls part is defined
       tlsEnabled: !!route.spec.tls,
+      created: route.metadata?.creationTimestamp ? new Date(route.metadata.creationTimestamp) : undefined,
     };
   }
   isIngress(object: IngressUI | RouteUI): object is IngressUI {

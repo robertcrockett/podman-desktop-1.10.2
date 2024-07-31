@@ -26,8 +26,8 @@ import { readable, writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import * as kubeContextStore from '/@/stores/kubernetes-contexts-state';
+import type { V1Route } from '/@api/openshift-types';
 
-import type { V1Route } from '../../../../main/src/plugin/api/openshift-types';
 import type { ContextGeneralState } from '../../../../main/src/plugin/kubernetes-context-state';
 import IngressesRoutesList from './IngressesRoutesList.svelte';
 
@@ -146,4 +146,11 @@ test('Expect status column name to be clickable / sortable', async () => {
 
   // Expect it to have the 'cursor-pointer' class which means it's clickable / sortable
   expect(statusColumn).toHaveClass('cursor-pointer');
+});
+
+test('Expect there to be an age column', async () => {
+  await waitRender({});
+
+  const ageColumn = screen.getByRole('columnheader', { name: 'Age' });
+  expect(ageColumn).toBeInTheDocument();
 });

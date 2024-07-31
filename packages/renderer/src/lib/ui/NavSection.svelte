@@ -2,12 +2,12 @@
 /* eslint-disable import/no-duplicates */
 // https://github.com/import-js/eslint-plugin-import/issues/1479
 import { faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
+import { Tooltip } from '@podman-desktop/ui-svelte';
 import { onMount, setContext } from 'svelte';
 import { type Writable, writable } from 'svelte/store';
 import Fa from 'svelte-fa';
 
 import { fadeSlide } from './animations';
-import Tooltip from './Tooltip.svelte';
 /* eslint-disable import/no-duplicates */
 
 export let expanded: boolean = true;
@@ -33,10 +33,10 @@ onMount(() => {
   {/if}
 
   <button
-    class="inline-block flex flex-col justify-center items-center"
+    class="inline-block flex flex-col justify-center items-center text-[var(--pd-global-nav-icon)] hover:text-[var(--pd-global-nav-icon-hover)]"
     on:click="{() => (expanded = !expanded)}"
     disabled="{expanded && $count < 2}">
-    <Tooltip class="flex flex-col justify-center items-center pb-1" tip="{tooltip}" right>
+    <Tooltip class="flex flex-col justify-center items-center pb-1" right tip="{tooltip}">
       <div class="flex flex-col justify-center items-center" class:text-charcoal-50="{expanded && $count < 2}">
         {#if !expanded}
           <div class="py-2" transition:fadeSlide="{{ duration: 500 }}">

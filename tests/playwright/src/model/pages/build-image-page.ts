@@ -18,6 +18,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect as playExpect } from '@playwright/test';
 
+import { ArchitectureType } from '../core/platforms';
 import { BasePage } from './base-page';
 import { ImagesPage } from './images-page';
 
@@ -29,19 +30,34 @@ export class BuildImagePage extends BasePage {
   readonly buildButton: Locator;
   readonly doneButton: Locator;
   readonly containerFilePathButton: Locator;
+  readonly platformRegion: Locator;
+  readonly arm64Button: Locator;
+  readonly amd64Button: Locator;
+  readonly arm64checkbox: Locator;
+  readonly amd64checkbox: Locator;
 
   constructor(page: Page) {
     super(page);
     this.heading = page.getByRole('heading', { name: 'Build Image from Containerfile' });
     this.containerFilePathInput = page.getByPlaceholder('Containerfile to build');
-    this.buildContextDirectoryInput = page.getByPlaceholder('Folder to build in');
+    this.buildContextDirectoryInput = page.getByPlaceholder('Directory to build in');
     this.imageNameInput = page.getByPlaceholder('my-custom-image');
-    this.buildButton = page.getByRole('button', { name: 'Build' });
+    this.buildButton = page.getByRole('button', { name: 'Build', exact: true });
     this.doneButton = page.getByRole('button', { name: 'Done' });
     this.containerFilePathButton = page.getByRole('button', { name: 'Browse...' }).first();
+    this.platformRegion = page.getByRole('region', { name: 'Build Platform Options' });
+    this.arm64Button = this.platformRegion.getByLabel('linux/arm64');
+    this.amd64Button = this.platformRegion.getByLabel('linux/amd64');
+    this.arm64checkbox = this.platformRegion.getByLabel('ARM® aarch64 systems');
+    this.amd64checkbox = this.platformRegion.getByLabel('Intel and AMD x86_64 systems');
   }
 
-  async buildImage(imageName: string, containerFilePath: string, contextDirectory: string): Promise<ImagesPage> {
+  async buildImage(
+    imageName: string,
+    containerFilePath: string,
+    contextDirectory: string,
+    archType = ArchitectureType.Default,
+  ): Promise<ImagesPage> {
     if (!containerFilePath) {
       throw Error(`Path to containerfile is incorrect or not provided!`);
     }
@@ -51,13 +67,42 @@ export class BuildImagePage extends BasePage {
     if (contextDirectory) await this.buildContextDirectoryInput.fill(contextDirectory);
     if (imageName) {
       await this.imageNameInput.clear();
-      await this.imageNameInput.fill(imageName);
+      await this.imageNameInput.pressSequentially(imageName, { delay: 50 });
+    }
+
+    if (archType !== ArchitectureType.Default) {
+      await this.uncheckedAllCheckboxes();
+
+      switch (archType) {
+        case ArchitectureType.ARM64:
+          await this.arm64Button.click();
+          await playExpect(this.arm64checkbox).toBeChecked();
+          break;
+        case ArchitectureType.AMD64:
+          await this.amd64Button.click();
+          await playExpect(this.amd64checkbox).toBeChecked();
+          break;
+      }
     }
 
     await playExpect(this.buildButton).toBeEnabled();
+    await this.buildButton.scrollIntoViewIfNeeded();
     await this.buildButton.click();
+
     await playExpect(this.doneButton).toBeEnabled({ timeout: 120000 });
+    await this.doneButton.scrollIntoViewIfNeeded();
     await this.doneButton.click();
     return new ImagesPage(this.page);
+  }
+
+  async uncheckedAllCheckboxes(): Promise<void> {
+    if (await this.arm64checkbox.isChecked()) {
+      await this.arm64Button.click();
+      await playExpect(this.arm64checkbox).not.toBeChecked();
+    }
+    if (await this.amd64checkbox.isChecked()) {
+      await this.amd64Button.click();
+      await playExpect(this.amd64checkbox).not.toBeChecked();
+    }
   }
 }

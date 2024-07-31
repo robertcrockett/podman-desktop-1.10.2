@@ -17,6 +17,7 @@ that we follow.
 - [Communication](#communication)
 - [Code Architecture](#code-architecture)
 - [Maintainer Tasks](#maintainer-tasks)
+- [Website Contributions](#website-contributions)
 
 ## Reporting Issues
 
@@ -359,7 +360,30 @@ If you're unsure where to add code (renderer, UI, extensions, plugins) see the b
 
 Podman Desktop is modularized into extensions for each 'Provider'. You can also create and add your own extension.
 
-See our [EXTENSIONS.md](/EXTENSIONS.md) document for more details.
+See our [extensions documentation](https://podman-desktop.io/docs/extensions) on our website for more information.
+
+### UI colors
+
+Colors in Podman Desktop are now managed by a [`color-registry.ts`](https://github.com/containers/podman-desktop/blob/main/packages/main/src/plugin/color-registry.ts) file in order to easily switch between light and dark mode.
+
+When contributing a UI component to Podman Desktop that is colorized, you must go through some steps to figure out what color to use and how to reference it.
+
+Steps:
+1. Open the [`color-registry.ts`](https://github.com/containers/podman-desktop/blob/main/packages/main/src/plugin/color-registry.ts) file.
+2. Figure out which color category from the `initColors()` function.
+3. Use the referenced color with the format `[var(--pd-<color>)]`
+
+Example:
+1. Choose what UI component you want to add: Ex. I want to add a new primary button.
+2. Look under `initColors()` and pick `this.initButton()` and scroll down to `protected initButton()`.
+3. Pick a color. I want to use the the "primary" button. So I will pick: `${button}primary-bg`.
+4. Scroll up and note the `const` below `protected initButton()` which is `const button = 'button-';`
+5. The color can be referenced with `[var(--pd-button-primary-bg)]`. The `[var(--pd-` portion will always be consistent when refering to a color variable.
+6. For example:
+
+```ts
+<Button class="bg-[var(--pd-button-primary-bg)]"/>
+```
 
 ## Maintainer tasks
 
@@ -375,3 +399,7 @@ Your responsibilities include:
 - Evaluating the severity of new issues. If an issue is classified as "critical" or "high priority" and requires immediate attention, tag a maintainer in the issue and notify them via the public community channel.
 - Identifying issues that are simple to resolve and marking them as "good first issue," thereby encouraging newcomers to contribute to the project.
 - Evaluating any stale / lingering pull requests and pinging the respective contributors. If the pull request has been opened for an extensive amount of time, ping someone to contact the contributor / push any changes required to get it merged in. If there is no communication / the pull request is stale, close them.
+
+## Website Contributions
+
+See our [WEBSITE_CONTRIBUTING](/WEBSITE_CONTRIBUTING.md) documentation for more details on how to contribute to the website.

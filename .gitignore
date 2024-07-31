@@ -1,0 +1,13 @@
+node_modules
+.DS_Store
+dist
+.eslintcache
+*.cdix
+.parcel-cache
+.idea
+.vale/styles/RedHat
+**/test-resources
+**/coverage
+/kind
+/kind.exe
+/storybook/.storybook/themes.css

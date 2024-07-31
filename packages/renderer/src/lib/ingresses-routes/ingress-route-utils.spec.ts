@@ -19,7 +19,8 @@
 import type { V1Ingress } from '@kubernetes/client-node';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { V1Route } from '../../../../main/src/plugin/api/openshift-types';
+import type { V1Route } from '/@api/openshift-types';
+
 import { IngressRouteUtils } from './ingress-route-utils';
 import type { IngressUI } from './IngressUI';
 import type { RouteUI } from './RouteUI';
@@ -346,4 +347,37 @@ test('expect no tls on route', async () => {
   } as V1Route;
   const routeUI = ingressRouteUtils.getRouteUI(route);
   expect(routeUI.tlsEnabled).toBeFalsy();
+});
+
+test('expect created date on ingress', async () => {
+  const ingress = {
+    metadata: {
+      name: 'my-ingress',
+      namespace: 'test-namespace',
+      creationTimestamp: new Date(),
+    },
+    spec: {
+      rules: [
+        {
+          host: 'foo.bar.com',
+          http: {
+            paths: [
+              {
+                path: '/foo',
+                pathType: 'Prefix',
+                backend: {
+                  resource: {
+                    name: 'bucket',
+                    kind: 'StorageBucket',
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  } as V1Ingress;
+  const ingressUI = ingressRouteUtils.getIngressUI(ingress);
+  expect(ingressUI.created).toBeDefined();
 });

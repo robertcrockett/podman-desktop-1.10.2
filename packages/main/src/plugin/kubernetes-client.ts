@@ -34,6 +34,8 @@ import type {
   V1Deployment,
   V1Ingress,
   V1NamespaceList,
+  V1Node,
+  V1PersistentVolumeClaim,
   V1Pod,
   V1PodList,
   V1Service,
@@ -58,9 +60,9 @@ import * as jsYaml from 'js-yaml';
 import { parseAllDocuments } from 'yaml';
 
 import type { Telemetry } from '/@/plugin/telemetry/telemetry.js';
+import type { V1Route } from '/@api/openshift-types.js';
 
 import type { ApiSenderType } from './api.js';
-import type { V1Route } from './api/openshift-types.js';
 import type { PodInfo } from './api/pod-info.js';
 import type { ConfigurationRegistry, IConfigurationNode } from './configuration-registry.js';
 import { Emitter } from './events/emitter.js';
@@ -92,25 +94,26 @@ function toPodInfo(pod: V1Pod, contextName?: string): PodInfo {
   const containers =
     pod.status?.containerStatuses?.map(status => {
       return {
-        Id: status.containerID || '',
+        Id: status.containerID ?? '',
         Names: status.name,
         Status: toContainerStatus(status.state),
       };
-    }) || [];
+    }) ?? [];
   return {
     Cgroup: '',
     Containers: containers,
-    Created: (pod.metadata?.creationTimestamp || '').toString(),
-    Id: pod.metadata?.uid || '',
+    Created: (pod.metadata?.creationTimestamp ?? '').toString(),
+    Id: pod.metadata?.uid ?? '',
     InfraId: '',
-    Labels: pod.metadata?.labels || {},
-    Name: pod.metadata?.name || '',
-    Namespace: pod.metadata?.namespace || '',
+    Labels: pod.metadata?.labels ?? {},
+    Name: pod.metadata?.name ?? '',
+    Namespace: pod.metadata?.namespace ?? '',
     Networks: [],
-    Status: pod.metadata?.deletionTimestamp ? 'DELETING' : pod.status?.phase || '',
+    Status: pod.metadata?.deletionTimestamp ? 'DELETING' : pod.status?.phase ?? '',
     engineId: contextName ?? 'kubernetes',
     engineName: 'Kubernetes',
     kind: 'kubernetes',
+    node: pod.spec?.nodeName,
   };
 }
 
@@ -188,10 +191,10 @@ export class KubernetesClient {
     const kubernetesConfiguration = this.configurationRegistry.getConfiguration('kubernetes');
     const userKubeconfigPath = kubernetesConfiguration.get<string>('Kubeconfig');
     if (userKubeconfigPath) {
+      this.kubeconfigPath = userKubeconfigPath;
       this.setupWatcher(userKubeconfigPath);
       // check if path exists
       if (existsSync(userKubeconfigPath)) {
-        this.kubeconfigPath = userKubeconfigPath;
         this.refresh().catch(() => console.error('Refresh of kube resources on startup failed'));
       } else {
         console.error(`Kubeconfig path ${userKubeconfigPath} provided does not exist. Skipping.`);
@@ -543,7 +546,6 @@ export class KubernetesClient {
   }
 
   async listNamespacedPod(namespace: string, fieldSelector?: string, labelSelector?: string): Promise<V1PodList> {
-    let telemetryOptions = {};
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.listNamespacedPod(
@@ -562,10 +564,7 @@ export class KubernetesClient {
         };
       }
     } catch (error) {
-      telemetryOptions = { error: error };
       throw this.wrapK8sClientError(error);
-    } finally {
-      this.telemetry.track('kubernetesListNamespacePod', telemetryOptions);
     }
   }
 
@@ -705,6 +704,24 @@ export class KubernetesClient {
     }
   }
 
+  async deletePersistentVolumeClaim(name: string): Promise<void> {
+    let telemetryOptions = {};
+    try {
+      const ns = this.getCurrentNamespace();
+      // Only delete PVC if valid namespace && valid connection
+      const connected = await this.checkConnection();
+      if (ns && connected) {
+        const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
+        await k8sApi.deleteNamespacedPersistentVolumeClaim(name, ns);
+      }
+    } catch (error) {
+      telemetryOptions = { error: error };
+      throw this.wrapK8sClientError(error);
+    } finally {
+      this.telemetry.track('kubernetesDeletePersistentVolumeClaim', telemetryOptions);
+    }
+  }
+
   async deleteIngress(name: string): Promise<void> {
     let telemetryOptions = {};
     try {
@@ -764,6 +781,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedPod(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -778,6 +798,9 @@ export class KubernetesClient {
     const k8sAppsApi = this.kubeConfig.makeApiClient(AppsV1Api);
     try {
       const res = await k8sAppsApi.readNamespacedDeployment(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -786,11 +809,52 @@ export class KubernetesClient {
       this.telemetry.track('kubernetesReadNamespacedDeployment', telemetryOptions);
     }
   }
+
+  async readNamespacedPersistentVolumeClaim(
+    name: string,
+    namespace: string,
+  ): Promise<V1PersistentVolumeClaim | undefined> {
+    let telemetryOptions = {};
+    const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
+    try {
+      const res = await k8sApi.readNamespacedPersistentVolumeClaim(name, namespace);
+      if (res?.body?.metadata?.managedFields) {
+        delete res?.body.metadata?.managedFields;
+      }
+      return res?.body;
+    } catch (error) {
+      telemetryOptions = { error: error };
+      throw this.wrapK8sClientError(error);
+    } finally {
+      this.telemetry.track('kubernetesReadNamespacedPersistentVolumeClaim', telemetryOptions);
+    }
+  }
+
+  async readNode(name: string): Promise<V1Node | undefined> {
+    let telemetryOptions = {};
+    const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
+    try {
+      const res = await k8sApi.readNode(name);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
+      return res?.body;
+    } catch (error) {
+      telemetryOptions = { error: error };
+      throw this.wrapK8sClientError(error);
+    } finally {
+      this.telemetry.track('kubernetesReadNode', telemetryOptions);
+    }
+  }
+
   async readNamespacedIngress(name: string, namespace: string): Promise<V1Ingress | undefined> {
     let telemetryOptions = {};
     const k8sNetworkingApi = this.kubeConfig.makeApiClient(NetworkingV1Api);
     try {
       const res = await k8sNetworkingApi.readNamespacedIngress(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -811,7 +875,11 @@ export class KubernetesClient {
         'routes',
         name,
       );
-      return res?.body as V1Route;
+      const route = res?.body as V1Route;
+      if (route?.metadata?.managedFields) {
+        delete route.metadata.managedFields;
+      }
+      return route;
     } catch (error) {
       telemetryOptions = { error: error };
       throw this.wrapK8sClientError(error);
@@ -825,6 +893,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedService(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -839,6 +910,9 @@ export class KubernetesClient {
     const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
     try {
       const res = await k8sApi.readNamespacedConfigMap(name, namespace);
+      if (res.body?.metadata?.managedFields) {
+        delete res.body.metadata.managedFields;
+      }
       return res?.body;
     } catch (error) {
       telemetryOptions = { error: error };
@@ -849,7 +923,6 @@ export class KubernetesClient {
   }
 
   async listNamespaces(): Promise<V1NamespaceList> {
-    let telemetryOptions = {};
     try {
       const k8sApi = this.kubeConfig.makeApiClient(CoreV1Api);
       const res = await k8sApi.listNamespace();
@@ -861,10 +934,7 @@ export class KubernetesClient {
         };
       }
     } catch (error) {
-      telemetryOptions = { error: error };
       throw this.wrapK8sClientError(error);
-    } finally {
-      this.telemetry.track('kubernetesListNamespaces', telemetryOptions);
     }
   }
 
@@ -926,47 +996,47 @@ export class KubernetesClient {
     if (manifest.kind === 'Namespace') {
       return client.createNamespace(manifest);
     } else if (manifest.kind === 'Pod') {
-      return client.createNamespacedPod(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedPod(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'Service') {
-      return client.createNamespacedService(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedService(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'Binding') {
-      return client.createNamespacedBinding(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedBinding(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'Event') {
-      return client.createNamespacedEvent(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedEvent(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'Endpoints') {
-      return client.createNamespacedEndpoints(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedEndpoints(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'ConfigMap') {
-      return client.createNamespacedConfigMap(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedConfigMap(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'LimitRange') {
-      return client.createNamespacedLimitRange(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedLimitRange(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'PersistentVolumeClaim') {
-      return client.createNamespacedPersistentVolumeClaim(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedPersistentVolumeClaim(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'PodBinding') {
       return client.createNamespacedPodBinding(
         manifest.metadata.name,
-        optionalNamespace || manifest.metadata.namespace,
+        optionalNamespace ?? manifest.metadata.namespace,
         manifest,
       );
     } else if (manifest.kind === 'PodEviction') {
       return client.createNamespacedPodEviction(
         manifest.metadata.name,
-        optionalNamespace || manifest.metadata.namespace,
+        optionalNamespace ?? manifest.metadata.namespace,
         manifest,
       );
     } else if (manifest.kind === 'PodTemplate') {
-      return client.createNamespacedPodTemplate(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedPodTemplate(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'ReplicationController') {
-      return client.createNamespacedReplicationController(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedReplicationController(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'ResourceQuota') {
-      return client.createNamespacedResourceQuota(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedResourceQuota(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'Secret') {
-      return client.createNamespacedSecret(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedSecret(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'ServiceAccount') {
-      return client.createNamespacedServiceAccount(optionalNamespace || manifest.metadata.namespace, manifest);
+      return client.createNamespacedServiceAccount(optionalNamespace ?? manifest.metadata.namespace, manifest);
     } else if (manifest.kind === 'ServiceAccountToken') {
       return client.createNamespacedServiceAccountToken(
         manifest.metadata.name,
-        optionalNamespace || manifest.metadata.namespace,
+        optionalNamespace ?? manifest.metadata.namespace,
         manifest,
       );
     }
@@ -1108,7 +1178,7 @@ export class KubernetesClient {
    */
   async applyResourcesFromYAML(context: string, yaml: string): Promise<KubernetesObject[]> {
     const manifests = await this.loadManifestsFromYAML(yaml);
-    return this.applyResources(context, manifests, 'apply');
+    return this.applyResources(context, manifests);
   }
 
   /**
@@ -1172,7 +1242,7 @@ export class KubernetesClient {
         spec.metadata.annotations['kubectl.kubernetes.io/last-applied-configuration'] = JSON.stringify(spec);
 
         if (!spec.metadata.namespace) {
-          spec.metadata.namespace = namespace || DEFAULT_NAMESPACE;
+          spec.metadata.namespace = namespace ?? DEFAULT_NAMESPACE;
         }
         try {
           // try to get the resource, if it does not exist an error will be thrown and we will

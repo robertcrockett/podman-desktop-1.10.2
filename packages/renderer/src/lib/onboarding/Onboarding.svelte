@@ -28,6 +28,7 @@
 <script lang="ts">
 import { faCircleQuestion } from '@fortawesome/free-regular-svg-icons';
 import { faForward } from '@fortawesome/free-solid-svg-icons';
+import { Button, Link, Spinner } from '@podman-desktop/ui-svelte';
 import { onDestroy, onMount } from 'svelte';
 import type { Unsubscriber } from 'svelte/store';
 import Fa from 'svelte-fa';
@@ -36,17 +37,13 @@ import { router } from 'tinro';
 import { lastPage } from '/@/stores/breadcrumb';
 import { context } from '/@/stores/context';
 import { onboardingList } from '/@/stores/onboarding';
+import type { OnboardingInfo, OnboardingStepItem } from '/@api/onboarding';
 
-import type { OnboardingInfo, OnboardingStepItem } from '../../../../main/src/plugin/api/onboarding';
 import type { ContextUI } from '../context/context';
 import { ContextKeyExpr } from '../context/contextKey';
-import Button from '../ui/Button.svelte';
-import Link from '../ui/Link.svelte';
-import Spinner from '../ui/Spinner.svelte';
 import {
   type ActiveOnboardingStep,
   cleanSetup,
-  isOnboardingsSetupCompleted,
   isStepCompleted,
   normalizeOnboardingWhenClause,
   replaceContextKeyPlaceholders,
@@ -98,7 +95,7 @@ onMount(async () => {
         return row.filter(item => {
           return evaluateWhen(item.when, activeStep.onboarding.extension);
         });
-      }) || [];
+      }) ?? [];
 
     // when the context is updated it checks if the onboarding already started
     if (started) {
@@ -115,10 +112,8 @@ onMount(async () => {
 async function startOnboarding(): Promise<void> {
   if (!started && globalContext && onboardings.length > 0) {
     started = true;
-    if (!isOnboardingsSetupCompleted(onboardings)) {
-      telemetrySession.restart();
-      await restartSetup();
-    }
+    telemetrySession.restart();
+    await restartSetup();
   }
 }
 
@@ -159,7 +154,7 @@ async function setActiveStep() {
                 return row.filter(item => {
                   return evaluateWhen(item.when, onboarding.extension);
                 });
-              }) || [];
+              }) ?? [];
             if (step.command) {
               try {
                 await doExecuteCommand(step.command);

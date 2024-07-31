@@ -1,22 +1,20 @@
 <script lang="ts">
 import { faHistory, faPlay, faStop } from '@fortawesome/free-solid-svg-icons';
+import { Button, ErrorMessage, Modal } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import { router } from 'tinro';
 import type { Terminal } from 'xterm';
 
 import { operationConnectionsInfo } from '/@/stores/operation-connections';
-
 import type {
   ProviderContainerConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
-} from '../../../../main/src/plugin/api/provider-info';
+} from '/@api/provider-info';
+
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import Route from '../../Route.svelte';
 import { providerInfos } from '../../stores/providers';
-import Modal from '../dialogs/Modal.svelte';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
 import TerminalWindow from '../ui/TerminalWindow.svelte';
 import PreferencesConnectionCreationRendering from './PreferencesConnectionCreationOrEditRendering.svelte';
@@ -55,10 +53,10 @@ $: providerInfo = providers.filter(provider => provider.internalId === providerI
 let providerDisplayName: string;
 $: providerDisplayName =
   (providerInfo?.containerProviderConnectionCreation
-    ? providerInfo?.containerProviderConnectionCreationDisplayName || undefined
+    ? providerInfo?.containerProviderConnectionCreationDisplayName ?? undefined
     : providerInfo?.kubernetesProviderConnectionCreation
       ? providerInfo?.kubernetesProviderConnectionCreationDisplayName
-      : undefined) || providerInfo?.name;
+      : undefined) ?? providerInfo?.name;
 
 let title: string;
 $: title = connectionInfo ? `Update ${providerDisplayName} ${connectionInfo.name}` : `Create ${providerDisplayName}`;
@@ -144,7 +142,7 @@ async function stopReceivingLogs(providerInternalId: string): Promise<void> {
       {/if}
     </svelte:fragment>
 
-    <div slot="content" class="p-5 min-w-full h-fit">
+    <div slot="content" class="px-5 pb-5 min-w-full h-fit">
       <div class="bg-charcoal-700 px-6 py-4">
         <!-- Create connection panel-->
         {#if providerInfo?.containerProviderConnectionCreation === true}

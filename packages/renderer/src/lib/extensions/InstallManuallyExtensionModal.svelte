@@ -1,11 +1,7 @@
 <script lang="ts">
 import { faCloudDownload } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, CloseButton, Input, Modal } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
-
-import Modal from '/@/lib/dialogs/Modal.svelte';
-import Button from '/@/lib/ui/Button.svelte';
-import CloseButton from '/@/lib/ui/CloseButton.svelte';
 
 export let closeCallback: () => void;
 let imageName = '';
@@ -96,17 +92,18 @@ function handleKeydown(e: KeyboardEvent) {
   on:close="{() => {
     closeCallback();
   }}">
-  <div class="modal flex flex-col place-self-center bg-charcoal-800 shadow-xl shadow-black">
-    <div class="flex items-center justify-between px-6 py-5 space-x-2">
+  <div class="modal flex flex-col place-self-center">
+    <div
+      class="flex items-center justify-between px-6 py-5 space-x-2 text-[var(--pd-modal-header-text)] bg-[var(--pd-modal-header-bg)]">
       <h1 class="grow text-lg font-bold capitalize">Install custom extension</h1>
 
       <CloseButton on:click="{() => closeCallback()}" />
     </div>
     <div class="flex flex-col px-10 py-4 text-sm leading-5 space-y-5">
       <div>
-        <label for="imageName" class="block text-sm pb-2 text-gray-400">OCI Image:</label>
+        <label for="imageName" class="block text-sm pb-2 text-[var(--pd-modal-text)]">OCI Image:</label>
         <div class="min-h-14">
-          {#if progressPercent < 100}
+          {#if installInProgress || progressPercent !== 100}
             <Input
               bind:value="{imageName}"
               name="imageName"
@@ -119,14 +116,19 @@ function handleKeydown(e: KeyboardEvent) {
               aria-label="{inputAriaLabel}"
               required />
           {:else}
-            <div class="text-gray-400">{imageName} successfully installed.</div>
+            <div class="text-[var(--pd-modal-text)]">{imageName} successfully installed.</div>
           {/if}
         </div>
         <div class="w-full min-h-9 h-9 py-2">
           {#if installInProgress}
             <div class="flex grow">
               <div class="w-full h-4 mb-4 rounded-md bg-gray-600 progress-bar overflow-hidden">
-                <div class="h-4 bg-purple-500 rounded-md" role="progressbar" style="width: {progressPercent}%"></div>
+                <div
+                  class="h-4 bg-purple-500 rounded-md"
+                  role="progressbar"
+                  aria-label="Installation progress"
+                  style="width: {progressPercent}%">
+                </div>
               </div>
               <div class="ml-2 w-3 text-xs text-purple-500">{progressPercent}%</div>
             </div>
@@ -138,14 +140,14 @@ function handleKeydown(e: KeyboardEvent) {
             on:click="{() => {
               closeCallback();
             }}">Cancel</Button>
-          {#if progressPercent !== 100}
+          {#if installInProgress || progressPercent !== 100}
             <Button
               icon="{faCloudDownload}"
               disabled="{inputfieldError !== undefined}"
               on:click="{() => installExtension()}"
               inProgress="{installInProgress}">Install</Button>
           {/if}
-          {#if progressPercent === 100}
+          {#if !installInProgress && progressPercent === 100}
             <Button on:click="{() => closeCallback()}">Done</Button>
           {/if}
         </div>

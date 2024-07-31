@@ -1,6 +1,7 @@
 <script lang="ts">
 import { faArrowUpRightFromSquare, faGear } from '@fortawesome/free-solid-svg-icons';
 import type { ContainerProviderConnection } from '@podman-desktop/api';
+import { Button, EmptyScreen, Tooltip } from '@podman-desktop/ui-svelte';
 import { Buffer } from 'buffer';
 import { filesize } from 'filesize';
 import { onDestroy, onMount } from 'svelte';
@@ -11,25 +12,22 @@ import { router } from 'tinro';
 import Donut from '/@/lib/donut/Donut.svelte';
 import { context } from '/@/stores/context';
 import { onboardingList } from '/@/stores/onboarding';
-
 import type {
   CheckStatus,
   ProviderContainerConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
-} from '../../../../main/src/plugin/api/provider-info';
+} from '/@api/provider-info';
+
 import type { IConfigurationPropertyRecordedSchema } from '../../../../main/src/plugin/configuration-registry';
 import { configurationProperties } from '../../stores/configurationProperties';
 import { providerInfos } from '../../stores/providers';
 import type { ContextUI } from '../context/context';
 import { ContextKeyExpr } from '../context/contextKey';
 import { normalizeOnboardingWhenClause } from '../onboarding/onboarding-utils';
-import Button from '../ui/Button.svelte';
 import ConnectionErrorInfoButton from '../ui/ConnectionErrorInfoButton.svelte';
 import ConnectionStatus from '../ui/ConnectionStatus.svelte';
-import EmptyScreen from '../ui/EmptyScreen.svelte';
 import EngineIcon from '../ui/EngineIcon.svelte';
-import Tooltip from '../ui/Tooltip.svelte';
 import { PeerProperties } from './PeerProperties';
 import { eventCollect } from './preferences-connection-rendering-task';
 import PreferencesConnectionActions from './PreferencesConnectionActions.svelte';
@@ -193,7 +191,7 @@ onDestroy(() => {
 
 $: configurationKeys = properties
   .filter(property => property.scope === 'ContainerConnection')
-  .sort((a, b) => (a?.id || '').localeCompare(b?.id || ''));
+  .sort((a, b) => (a?.id ?? '').localeCompare(b?.id ?? ''));
 
 let tmpProviderContainerConfiguration: IProviderConnectionConfigurationPropertyRecorded[] = [];
 $: Promise.all(
@@ -224,7 +222,7 @@ $: Promise.all(
 $: providerContainerConfiguration = tmpProviderContainerConfiguration
   .filter(configurationKey => configurationKey.value !== undefined)
   .reduce((map, value) => {
-    const innerProviderContainerConfigurations = map.get(value.providerId) || [];
+    const innerProviderContainerConfigurations = map.get(value.providerId) ?? [];
     innerProviderContainerConfigurations.push(value);
     map.set(value.providerId, innerProviderContainerConfigurations);
     return map;
@@ -249,7 +247,7 @@ function updateContainerStatus(
     }
   } else if (action) {
     containerConnectionStatus.set(containerConnectionName, {
-      inProgress: inProgress === undefined ? true : inProgress,
+      inProgress: inProgress ?? true,
       action: action,
       status: containerConnectionInfo.status,
     });
@@ -341,7 +339,7 @@ function isOnboardingEnabled(provider: ProviderInfo, globalContext: ContextUI): 
   whenEnablement = normalizeOnboardingWhenClause(whenEnablement, provider.extensionId);
   const whenDeserialized = ContextKeyExpr.deserialize(whenEnablement);
   const isEnabled = whenDeserialized?.evaluate(globalContext);
-  return isEnabled || false;
+  return !!isEnabled;
 }
 
 function hasAnyConfiguration(provider: ProviderInfo) {
@@ -374,7 +372,7 @@ function hasAnyConfiguration(provider: ProviderInfo) {
 
     {#each providers as provider}
       <div
-        class="bg-charcoal-600 mb-5 rounded-md p-3 divide-x divide-gray-900 flex"
+        class="bg-[var(--pd-invert-content-card-bg)] mb-5 rounded-md p-3 divide-x divide-gray-900 flex"
         role="region"
         aria-label="{provider.id}">
         <div role="region" aria-label="Provider Setup">
@@ -389,7 +387,8 @@ function hasAnyConfiguration(provider: ProviderInfo) {
                   <img src="{provider.images.icon.dark}" alt="{provider.name}" class="max-w-[40px]" />
                 {/if}
               {/if}
-              <span class="my-auto text-gray-400 ml-3 break-words">{provider.name}</span>
+              <span class="my-auto text-[var(--pd-invert-content-card-header-text)] ml-3 break-words"
+                >{provider.name}</span>
             </div>
             <div class="text-center mt-10">
               <!-- Some providers have a status of 'unknown' so that they do not appear in the dashboard, this allows onboarding to still show. -->
@@ -405,18 +404,18 @@ function hasAnyConfiguration(provider: ProviderInfo) {
                   {#if provider.containerProviderConnectionCreation || provider.kubernetesProviderConnectionCreation}
                     {@const providerDisplayName =
                       (provider.containerProviderConnectionCreation
-                        ? provider.containerProviderConnectionCreationDisplayName || undefined
+                        ? provider.containerProviderConnectionCreationDisplayName ?? undefined
                         : provider.kubernetesProviderConnectionCreation
                           ? provider.kubernetesProviderConnectionCreationDisplayName
-                          : undefined) || provider.name}
+                          : undefined) ?? provider.name}
                     {@const buttonTitle =
                       (provider.containerProviderConnectionCreation
-                        ? provider.containerProviderConnectionCreationButtonTitle || undefined
+                        ? provider.containerProviderConnectionCreationButtonTitle ?? undefined
                         : provider.kubernetesProviderConnectionCreation
                           ? provider.kubernetesProviderConnectionCreationButtonTitle
-                          : undefined) || 'Create new'}
+                          : undefined) ?? 'Create new'}
                     <!-- create new provider button -->
-                    <Tooltip tip="Create new {providerDisplayName}" bottom>
+                    <Tooltip bottom tip="Create new {providerDisplayName}">
                       <Button
                         aria-label="Create new {providerDisplayName}"
                         inProgress="{providerInstallationInProgress.get(provider.name)}"
@@ -445,7 +444,10 @@ function hasAnyConfiguration(provider: ProviderInfo) {
           </div>
         </div>
         <!-- providers columns -->
-        <div class="grow flex flex-wrap divide-gray-900 ml-2" role="region" aria-label="Provider Connections">
+        <div
+          class="grow flex flex-wrap divide-gray-900 ml-2 text-[var(--pd-invert-content-card-text)]"
+          role="region"
+          aria-label="Provider Connections">
           <PreferencesConnectionsEmptyRendering
             message="{provider.emptyConnectionMarkdownDescription}"
             hidden="{provider.containerConnections.length > 0 || provider.kubernetesConnections.length > 0}" />
@@ -453,7 +455,7 @@ function hasAnyConfiguration(provider: ProviderInfo) {
             {@const peerProperties = new PeerProperties()}
             <div class="px-5 py-2 w-[240px]" role="region" aria-label="{container.name}">
               <div class="float-right">
-                <Tooltip tip="{provider.name} details" bottom>
+                <Tooltip bottom tip="{provider.name} details">
                   <button
                     aria-label="{provider.name} details"
                     type="button"
@@ -484,7 +486,7 @@ function hasAnyConfiguration(provider: ProviderInfo) {
                 class="{container.status !== 'started' ? 'text-gray-900' : ''}"
                 path="{container.endpoint.socketPath}" />
               {#if providerContainerConfiguration.has(provider.internalId)}
-                {@const providerConfiguration = providerContainerConfiguration.get(provider.internalId) || []}
+                {@const providerConfiguration = providerContainerConfiguration.get(provider.internalId) ?? []}
                 <div
                   class="flex mt-3 {container.status !== 'started' ? 'text-gray-900' : ''}"
                   role="group"
@@ -536,7 +538,7 @@ function hasAnyConfiguration(provider: ProviderInfo) {
           {#each provider.kubernetesConnections as kubeConnection}
             <div class="px-5 py-2 w-[240px]" role="region" aria-label="{kubeConnection.name}">
               <div class="float-right">
-                <Tooltip tip="{provider.name} details" bottom>
+                <Tooltip bottom tip="{provider.name} details">
                   <button
                     aria-label="{provider.name} details"
                     type="button"

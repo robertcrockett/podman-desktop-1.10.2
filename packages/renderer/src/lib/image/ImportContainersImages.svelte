@@ -2,18 +2,15 @@
 /* eslint-disable import/no-duplicates */
 // https://github.com/import-js/eslint-plugin-import/issues/1479
 import { faMinusCircle, faPlay, faPlusCircle } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import { get } from 'svelte/store';
 import { router } from 'tinro';
 
-import Button from '/@/lib/ui//Button.svelte';
-import ErrorMessage from '/@/lib/ui//ErrorMessage.svelte';
 import FormPage from '/@/lib/ui//FormPage.svelte';
 import { providerInfos } from '/@/stores/providers';
 import { createTask } from '/@/stores/tasks';
-
-import type { ProviderContainerConnectionInfo, ProviderInfo } from '../../../../main/src/plugin/api/provider-info';
+import type { ProviderContainerConnectionInfo, ProviderInfo } from '/@api/provider-info';
 
 let containersToImport: { imagePath: string; nameWhenImporting: string }[] = [];
 let importError: string = '';
@@ -113,7 +110,7 @@ async function importContainers() {
   <svelte:fragment slot="icon">
     <i class="fas fa-play fa-2x" aria-hidden="true"></i>
   </svelte:fragment>
-  <div slot="content" class="p-5 min-w-full h-fit">
+  <div slot="content" class="px-5 pb-5 min-w-full h-fit">
     <div class="bg-charcoal-600 px-6 py-4 space-y-2 lg:px-8 sm:pb-6 xl:pb-8">
       {#if providerConnections.length > 1}
         <label for="providerChoice" class="py-6 block mb-2 text-sm font-bold text-gray-400"

@@ -1,8 +1,7 @@
 <script lang="ts">
 import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { Tooltip } from '@podman-desktop/ui-svelte';
 import Fa from 'svelte-fa';
-
-import Tooltip from './Tooltip.svelte';
 
 export let error: string;
 export let icon = false;
@@ -10,7 +9,7 @@ export let icon = false;
 
 {#if icon}
   {#if error !== undefined && error !== ''}
-    <Tooltip tip="{error}" top>
+    <Tooltip top tip="{error}">
       <Fa size="1.125x" class="cursor-pointer text-amber-500" icon="{faTriangleExclamation}" />
     </Tooltip>
   {/if}

@@ -1,12 +1,10 @@
 <script lang="ts">
 import { faCloudDownload } from '@fortawesome/free-solid-svg-icons';
+import { Button, FilteredEmptyScreen, NavPage } from '@podman-desktop/ui-svelte';
 import { derived, type Readable, writable } from 'svelte/store';
 
 import InstalledExtensionList from '/@/lib/extensions/InstalledExtensionList.svelte';
 import ExtensionIcon from '/@/lib/images/ExtensionIcon.svelte';
-import Button from '/@/lib/ui/Button.svelte';
-import FilteredEmptyScreen from '/@/lib/ui/FilteredEmptyScreen.svelte';
-import NavPage from '/@/lib/ui/NavPage.svelte';
 import { type CombinedExtensionInfoUI, combinedInstalledExtensions } from '/@/stores/all-installed-extensions';
 import { catalogExtensionInfos } from '/@/stores/catalog-extensions';
 import { featuredExtensionInfos } from '/@/stores/featuredExtensions';
@@ -82,11 +80,11 @@ let installManualImageModal: boolean = false;
   <svelte:fragment slot="bottom-additional-actions">
     <!-- display filter out items-->
     {#if filteredInstalledItems > 0 && screen === 'installed'}
-      <div class="text-sm text-gray-400">
+      <div class="text-sm text-[var(--pd-content-text)]">
         Filtered out {filteredInstalledItems} items of {$combinedInstalledExtensions.length}
       </div>
     {:else if filteredCatalogItems > 0 && screen === 'catalog'}
-      <div class="text-sm text-gray-400">
+      <div class="text-sm text-[var(--pd-content-text)]">
         Filtered out {filteredCatalogItems} items of {$enhancedCatalogExtensions.length}
       </div>
     {/if}

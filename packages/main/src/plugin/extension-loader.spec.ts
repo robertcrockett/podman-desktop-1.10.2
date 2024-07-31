@@ -26,16 +26,16 @@ import type * as containerDesktopAPI from '@podman-desktop/api';
 import { app } from 'electron';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ContributionInfo } from '/@/plugin/api/contribution-info.js';
 import type { ContributionManager } from '/@/plugin/contribution-manager.js';
 import type { KubeGeneratorRegistry } from '/@/plugin/kube-generator-registry.js';
 import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
 import { NavigationPage } from '/@/plugin/navigation/navigation-page.js';
 import type { WebviewRegistry } from '/@/plugin/webview/webview-registry.js';
+import type { ContributionInfo } from '/@api/contribution-info.js';
+import type { WebviewInfo } from '/@api/webview-info.js';
 
 import { getBase64Image } from '../util.js';
 import type { ApiSenderType } from './api.js';
-import type { WebviewInfo } from './api/webview-info.js';
 import type { AuthenticationImpl } from './authentication.js';
 import type { CliToolRegistry } from './cli-tool-registry.js';
 import type { ColorRegistry } from './color-registry.js';
@@ -65,6 +65,7 @@ import type { ExtensionSecretStorage, SafeStorageRegistry } from './safe-storage
 import type { StatusBarRegistry } from './statusbar/statusbar-registry.js';
 import type { Telemetry } from './telemetry/telemetry.js';
 import type { TrayMenuRegistry } from './tray-menu-registry.js';
+import type { IDisposable } from './types/disposable.js';
 import { Disposable } from './types/disposable.js';
 import { Uri } from './types/uri.js';
 import { Exec } from './util/exec.js';
@@ -85,6 +86,9 @@ class TestExtensionLoader extends ExtensionLoader {
 
   getExtensionState(): Map<string, string> {
     return this.extensionState;
+  }
+  getActivatedExtensions(): Map<string, ActivatedExtension> {
+    return this.activatedExtensions;
   }
 
   getExtensionStateErrors(): Map<string, unknown> {
@@ -119,11 +123,15 @@ const kubernetesGeneratorRegistry: KubeGeneratorRegistry = {} as unknown as Kube
 const providerRegistry: ProviderRegistry = {} as unknown as ProviderRegistry;
 
 const configurationRegistryGetConfigurationMock = vi.fn();
+const configurationRegistryUpdateConfigurationMock = vi.fn();
 const configurationRegistry: ConfigurationRegistry = {
   getConfiguration: configurationRegistryGetConfigurationMock,
+  updateConfigurationValue: configurationRegistryUpdateConfigurationMock,
 } as unknown as ConfigurationRegistry;
 
-const imageRegistry: ImageRegistry = {} as unknown as ImageRegistry;
+const imageRegistry: ImageRegistry = {
+  registerRegistry: vi.fn(),
+} as unknown as ImageRegistry;
 
 const apiSender: ApiSenderType = { send: vi.fn() } as unknown as ApiSenderType;
 
@@ -420,6 +428,38 @@ test('Verify extension error leads to failed state', async () => {
   expect(extensionLoader.getExtensionState().get(id)).toBe('failed');
 });
 
+test('Verify extension subscriptions are disposed when failed state reached', async () => {
+  const id = 'extension.id';
+  const disposableMock: containerDesktopAPI.Disposable = {
+    dispose: vi.fn(),
+  };
+  configurationRegistryGetConfigurationMock.mockReturnValue({
+    get: vi.fn().mockReturnValue(5000),
+  });
+  await extensionLoader.activateExtension(
+    {
+      id: id,
+      name: 'id',
+      path: 'dummy',
+      api: {} as typeof containerDesktopAPI,
+      mainPath: '',
+      removable: false,
+      manifest: {},
+      subscriptions: [],
+      readme: '',
+      dispose: vi.fn(),
+    },
+    {
+      activate: (extensionContext: containerDesktopAPI.ExtensionContext) => {
+        extensionContext.subscriptions.push(disposableMock);
+        throw Error('Failed');
+      },
+    },
+  );
+  expect(extensionLoader.getExtensionState().get(id)).toBe('failed');
+  expect(disposableMock.dispose).toHaveBeenCalledOnce();
+});
+
 test('Verify extension activate with a long timeout is flagged as error', async () => {
   const id = 'extension.id';
 
@@ -480,6 +520,50 @@ test('Verify extension load', async () => {
     'loadExtension',
     expect.objectContaining({ extensionId: id, extensionVersion: '1.1' }),
   );
+});
+
+test('Verify disable extension updates configuration', async () => {
+  const ids = ['extension.foo'];
+
+  configurationRegistryUpdateConfigurationMock.mockResolvedValue(Promise.resolve);
+  extensionLoader.setDisabledExtensionIds(ids);
+
+  expect(configurationRegistryUpdateConfigurationMock).toHaveBeenCalledWith('extensions.disabled', ids);
+});
+
+test('Verify enable extension updates configuration', async () => {
+  const id = 'extension.no.foo';
+  const before = ['a', id, 'b'];
+  const after = ['a', 'b'];
+
+  configurationRegistryGetConfigurationMock.mockReturnValue({
+    get: () => before,
+  });
+  configurationRegistryUpdateConfigurationMock.mockResolvedValue(Promise.resolve);
+  extensionLoader.ensureExtensionIsEnabled(id);
+
+  expect(configurationRegistryUpdateConfigurationMock).toHaveBeenCalledWith('extensions.disabled', after);
+});
+
+test('Verify stopping extension disables it', async () => {
+  const id = 'extension.no.foo';
+  configurationRegistryGetConfigurationMock.mockReturnValue({
+    get: () => [],
+  });
+  await extensionLoader.stopExtension(id);
+
+  expect(configurationRegistryUpdateConfigurationMock).toHaveBeenCalledWith('extensions.disabled', [id]);
+});
+
+test('Verify starting extension enables it', async () => {
+  const id = 'extension.no.foo';
+
+  configurationRegistryGetConfigurationMock.mockReturnValue({
+    get: () => ['extension.no.foo'],
+  });
+  await extensionLoader.startExtension(id);
+
+  expect(configurationRegistryUpdateConfigurationMock).toHaveBeenCalledWith('extensions.disabled', []);
 });
 
 test('Verify setExtensionsUpdates', async () => {
@@ -866,24 +950,34 @@ describe('analyze extension and main', async () => {
 
 describe('setContextValue', async () => {
   test('without scope the setValue is called with original value', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
     const setValueSpy = vi.spyOn(context, 'setValue');
 
     api.context.setValue('key', 'value');
     expect(setValueSpy).toBeCalledWith('key', 'value');
   });
   test('with onboarding scope the key is prefixed before calling setValue', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
     const setValueSpy = vi.spyOn(context, 'setValue');
 
     api.context.setValue('key', 'value', 'onboarding');
@@ -894,6 +988,9 @@ describe('setContextValue', async () => {
 describe('Removing extension by user', async () => {
   const ExtID = 'company.ext-id';
   test('sends telemetry w/o error when whens succeeds', async () => {
+    configurationRegistryGetConfigurationMock.mockReturnValue({
+      get: () => [],
+    });
     extensionLoader.removeExtension = vi.fn();
     await extensionLoader.removeExtensionPerUserRequest(ExtID);
     expect(extensionLoader.removeExtension).toBeCalledWith(ExtID);
@@ -960,14 +1057,71 @@ test('Verify extension uri', async () => {
   expect(grabUri.fsPath).toBe('dummy');
 });
 
+test('Verify exports and packageJSON', async () => {
+  const id = 'extension.id';
+  const activateMethod = vi.fn();
+  activateMethod.mockResolvedValue({
+    hello: () => 'world',
+  });
+
+  configurationRegistryGetConfigurationMock.mockReturnValue({ get: vi.fn().mockReturnValue(1) });
+
+  await extensionLoader.activateExtension(
+    {
+      id: id,
+      name: 'id',
+      path: 'dummy',
+      api: {} as typeof containerDesktopAPI,
+      mainPath: '',
+      removable: false,
+      manifest: {
+        foo: 'bar',
+      },
+      subscriptions: [],
+      readme: '',
+      dispose: vi.fn(),
+    },
+    { activate: activateMethod },
+  );
+
+  expect(activateMethod).toBeCalled();
+
+  const myActivatedExtension = extensionLoader.getActivatedExtensions().get(id);
+  expect(myActivatedExtension).toBeDefined();
+
+  expect(myActivatedExtension?.exports).toBeDefined();
+  expect(myActivatedExtension?.exports.hello()).toBe('world');
+
+  expect(myActivatedExtension?.packageJSON).toBeDefined();
+  expect((myActivatedExtension?.packageJSON as any)?.foo).toBe('bar');
+
+  const exposed = extensionLoader.getExposedExtension(id);
+  expect(exposed).toBeDefined();
+  expect(exposed?.exports.hello()).toBe('world');
+  expect((exposed as any).packageJSON.foo).toBe('bar');
+
+  const allExtensions = extensionLoader.getAllExposedExtensions();
+  expect(allExtensions).toBeDefined();
+  // 1 item
+  expect(allExtensions.length).toBe(1);
+  expect(allExtensions[0].exports.hello()).toBe('world');
+  expect((allExtensions[0] as any).packageJSON.foo).toBe('bar');
+});
+
 describe('Navigation', async () => {
   test('navigateToContainers', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Spy send method
     const sendMock = vi.spyOn(apiSender, 'send');
@@ -1021,12 +1175,18 @@ describe('Navigation', async () => {
       },
     },
   ])('$name', async ({ method, expected }) => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const containerExistSpy = vi.spyOn(containerProviderRegistry, 'containerExist');
@@ -1066,12 +1226,18 @@ describe('Navigation', async () => {
         api.navigateToContainerTerminal,
     },
   ])('$name', async ({ method }) => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const containerExistSpy = vi.spyOn(containerProviderRegistry, 'containerExist');
@@ -1091,12 +1257,18 @@ describe('Navigation', async () => {
   });
 
   test('navigateToImages', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Spy send method
     const sendMock = vi.spyOn(apiSender, 'send');
@@ -1105,12 +1277,18 @@ describe('Navigation', async () => {
     expect(sendMock).toBeCalledWith('navigate', { page: NavigationPage.IMAGES });
   });
   test('navigateToImage existing image', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const imageExistSpy = vi.spyOn(containerProviderRegistry, 'imageExist');
@@ -1135,12 +1313,18 @@ describe('Navigation', async () => {
     expect(imageExistSpy).toHaveBeenCalledOnce();
   });
   test('navigateToImage non-existent image', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const imageExistSpy = vi.spyOn(containerProviderRegistry, 'imageExist');
@@ -1165,12 +1349,18 @@ describe('Navigation', async () => {
     expect(imageExistSpy).toHaveBeenCalledOnce();
   });
   test('navigateToVolumes', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Spy send method
     const sendMock = vi.spyOn(apiSender, 'send');
@@ -1179,12 +1369,17 @@ describe('Navigation', async () => {
     expect(sendMock).toBeCalledWith('navigate', { page: NavigationPage.VOLUMES });
   });
   test('navigateToVolume existing volume', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const volumeExistSpy = vi.spyOn(containerProviderRegistry, 'volumeExist');
@@ -1208,12 +1403,18 @@ describe('Navigation', async () => {
     expect(volumeExistSpy).toHaveBeenCalledOnce();
   });
   test('navigateToVolume non-existent volume', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const volumeExistSpy = vi.spyOn(containerProviderRegistry, 'volumeExist');
@@ -1238,12 +1439,18 @@ describe('Navigation', async () => {
     expect(volumeExistSpy).toHaveBeenCalledOnce();
   });
   test('navigateToPods', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Spy send method
     const sendMock = vi.spyOn(apiSender, 'send');
@@ -1252,12 +1459,18 @@ describe('Navigation', async () => {
     expect(sendMock).toBeCalledWith('navigate', { page: NavigationPage.PODS });
   });
   test('navigateToPod existing pod', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const podExistSpy = vi.spyOn(containerProviderRegistry, 'podExist');
@@ -1283,12 +1496,18 @@ describe('Navigation', async () => {
     expect(podExistSpy).toHaveBeenCalledOnce();
   });
   test('navigateToPod non-existent volume', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const podExistSpy = vi.spyOn(containerProviderRegistry, 'podExist');
@@ -1314,12 +1533,18 @@ describe('Navigation', async () => {
   });
 
   test('navigateToContribution existing contribution', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listSimpleContainer implementation
     const listContributionsSpy = vi.spyOn(contributionManager, 'listContributions');
@@ -1346,12 +1571,18 @@ describe('Navigation', async () => {
     expect(listContributionsSpy).toHaveBeenCalledOnce();
   });
   test('navigateToContribution non-existent contribution', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     // Mock listContributions implementation
     const listContributionsSpy = vi.spyOn(contributionManager, 'listContributions');
@@ -1376,12 +1607,18 @@ describe('Navigation', async () => {
   });
 
   test('navigateToWebview', async () => {
-    const api = extensionLoader.createApi('path', {
-      name: 'name',
-      publisher: 'publisher',
-      version: '1',
-      displayName: 'dname',
-    });
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi(
+      'path',
+      {
+        name: 'name',
+        publisher: 'publisher',
+        version: '1',
+        displayName: 'dname',
+      },
+      disposables,
+    );
 
     vi.mocked(webviewRegistry.listWebviews).mockReturnValue([
       {
@@ -1404,12 +1641,18 @@ describe('Navigation', async () => {
 });
 
 test('check listWebviews', async () => {
-  const api = extensionLoader.createApi('path', {
-    name: 'name',
-    publisher: 'publisher',
-    version: '1',
-    displayName: 'dname',
-  });
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi(
+    'path',
+    {
+      name: 'name',
+      publisher: 'publisher',
+      version: '1',
+      displayName: 'dname',
+    },
+    disposables,
+  );
 
   // Mock listSimpleWebviews implementation
   const listSimpleWebviewsSpy = vi.spyOn(webviewRegistry, 'listSimpleWebviews');
@@ -1448,13 +1691,18 @@ test('check version', async () => {
   const fakeVersion = '1.2.3.4';
   // mock electron.app.getVersion
   vi.mocked(app.getVersion).mockReturnValue(fakeVersion);
+  const disposables: IDisposable[] = [];
 
-  const api = extensionLoader.createApi('path', {
-    name: 'name',
-    publisher: 'publisher',
-    version: '1',
-    displayName: 'dname',
-  });
+  const api = extensionLoader.createApi(
+    'path',
+    {
+      name: 'name',
+      publisher: 'publisher',
+      version: '1',
+      displayName: 'dname',
+    },
+    disposables,
+  );
 
   const readPodmanVersion = api.version;
 
@@ -1464,36 +1712,54 @@ test('check version', async () => {
 
 test('listPods', async () => {
   const listPodsSpy = vi.spyOn(containerProviderRegistry, 'listPods');
-  const api = extensionLoader.createApi('path', {
-    name: 'name',
-    publisher: 'publisher',
-    version: '1',
-    displayName: 'dname',
-  });
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi(
+    'path',
+    {
+      name: 'name',
+      publisher: 'publisher',
+      version: '1',
+      displayName: 'dname',
+    },
+    disposables,
+  );
   await api.containerEngine.listPods();
   expect(listPodsSpy).toHaveBeenCalledOnce();
 });
 
 test('stopPod', async () => {
   const stopPodSpy = vi.spyOn(containerProviderRegistry, 'stopPod');
-  const api = extensionLoader.createApi('path', {
-    name: 'name',
-    publisher: 'publisher',
-    version: '1',
-    displayName: 'dname',
-  });
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi(
+    'path',
+    {
+      name: 'name',
+      publisher: 'publisher',
+      version: '1',
+      displayName: 'dname',
+    },
+    disposables,
+  );
   await api.containerEngine.stopPod('engine1', 'pod1');
   expect(stopPodSpy).toHaveBeenCalledWith('engine1', 'pod1');
 });
 
 test('removePod', async () => {
   const removePodSpy = vi.spyOn(containerProviderRegistry, 'removePod');
-  const api = extensionLoader.createApi('path', {
-    name: 'name',
-    publisher: 'publisher',
-    version: '1',
-    displayName: 'dname',
-  });
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi(
+    'path',
+    {
+      name: 'name',
+      publisher: 'publisher',
+      version: '1',
+      displayName: 'dname',
+    },
+    disposables,
+  );
   await api.containerEngine.removePod('engine1', 'pod1');
   expect(removePodSpy).toHaveBeenCalledWith('engine1', 'pod1');
 });
@@ -1513,11 +1779,17 @@ describe('authentication Provider', async () => {
   });
 
   test('basic registerAuthenticationProvider ', async () => {
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
+    // size is 0 for disposables
+    expect(disposables.length).toBe(0);
     api.authentication.registerAuthenticationProvider('provider1.id', 'Provider1 Label', providerMock, {
       supportsMultipleAccounts: true,
     });
+    // one disposable
+    expect(disposables.length).toBe(1);
 
     expect(authenticationProviderRegistry.registerAuthenticationProvider).toBeCalledWith(
       'provider1.id',
@@ -1529,7 +1801,9 @@ describe('authentication Provider', async () => {
 
   test('allows images option to be undefined or empty', async () => {
     vi.mocked(getBase64Image).mockReturnValue(BASE64ENCODEDIMAGE);
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     api.authentication.registerAuthenticationProvider('provider1.id', 'Provider1 Label', providerMock, {});
@@ -1546,7 +1820,9 @@ describe('authentication Provider', async () => {
 
   test('allows images option to be single image', async () => {
     vi.mocked(getBase64Image).mockReturnValue(BASE64ENCODEDIMAGE);
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     api.authentication.registerAuthenticationProvider('provider1.id', 'Provider1 Label', providerMock, {
@@ -1567,7 +1843,9 @@ describe('authentication Provider', async () => {
 
   test('allows images option to be light/dark image', async () => {
     vi.mocked(getBase64Image).mockReturnValue(BASE64ENCODEDIMAGE);
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     api.authentication.registerAuthenticationProvider('provider1.id', 'Provider1 Label', providerMock, {
@@ -1600,9 +1878,11 @@ describe('authentication Provider', async () => {
 });
 
 test('createCliTool ', async () => {
-  const api = extensionLoader.createApi('/path', {});
-  expect(api).toBeDefined();
+  const disposables: IDisposable[] = [];
 
+  const api = extensionLoader.createApi('/path', {}, disposables);
+  expect(api).toBeDefined();
+  expect(disposables.length).toBe(0);
   const options: containerDesktopAPI.CliToolOptions = {
     name: 'tool-name',
     displayName: 'tool-display-name',
@@ -1615,13 +1895,16 @@ test('createCliTool ', async () => {
   vi.mocked(cliToolRegistry.createCliTool).mockReturnValue({ id: 'created' } as containerDesktopAPI.CliTool);
 
   const newCliTool = api.cli.createCliTool(options);
+  expect(disposables.length).toBe(1);
 
   expect(cliToolRegistry.createCliTool).toBeCalledWith(expect.objectContaining({ extensionPath: '/path' }), options);
   expect(newCliTool).toStrictEqual({ id: 'created' });
 });
 
 test('registerImageCheckerProvider ', async () => {
-  const api = extensionLoader.createApi('/path', {});
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi('/path', {}, disposables);
   expect(api).toBeDefined();
 
   const provider = {
@@ -1641,9 +1924,9 @@ test('registerImageCheckerProvider ', async () => {
   };
 
   vi.mocked(imageCheckerImpl.registerImageCheckerProvider).mockReturnValue(Disposable.create(() => {}));
-
+  expect(disposables.length).toBe(0);
   api.imageChecker.registerImageCheckerProvider(provider, { label: 'dummyLabel' });
-
+  expect(disposables.length).toBe(1);
   expect(imageCheckerImpl.registerImageCheckerProvider).toBeCalledWith(
     expect.objectContaining({ extensionPath: '/path' }),
     provider,
@@ -1680,7 +1963,9 @@ test('loadExtension with themes', async () => {
 
 describe('window', async () => {
   test('showOpenDialog ', async () => {
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const filePaths = ['/path-to-file1', '/path-to-file2'];
@@ -1696,7 +1981,9 @@ describe('window', async () => {
   });
 
   test('showSaveDialog ', async () => {
-    const api = extensionLoader.createApi('/path', {});
+    const disposables: IDisposable[] = [];
+
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const filePath = '/path-to-file1';
@@ -1713,8 +2000,9 @@ describe('containerEngine', async () => {
   test('statsContainer ', async () => {
     vi.mocked(containerProviderRegistry.getContainerStats).mockResolvedValue(99);
     vi.mocked(containerProviderRegistry.stopContainerStats).mockResolvedValue(undefined);
+    const disposables: IDisposable[] = [];
 
-    const api = extensionLoader.createApi('/path', {});
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const disposable = await api.containerEngine.statsContainer('dummyEngineId', 'dummyContainerId', () => {});
@@ -1735,8 +2023,9 @@ describe('containerEngine', async () => {
 
   test('listImages without option ', async () => {
     vi.mocked(containerProviderRegistry.podmanListImages).mockResolvedValue([]);
+    const disposables: IDisposable[] = [];
 
-    const api = extensionLoader.createApi('/path', {});
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const images = await api.containerEngine.listImages();
@@ -1746,8 +2035,9 @@ describe('containerEngine', async () => {
 
   test('listImages with provider option', async () => {
     vi.mocked(containerProviderRegistry.podmanListImages).mockResolvedValue([]);
+    const disposables: IDisposable[] = [];
 
-    const api = extensionLoader.createApi('/path', {});
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const images = await api.containerEngine.listImages({
@@ -1765,8 +2055,9 @@ describe('containerEngine', async () => {
 
   test('listInfos without option', async () => {
     vi.mocked(containerProviderRegistry.listInfos).mockResolvedValue([]);
+    const disposables: IDisposable[] = [];
 
-    const api = extensionLoader.createApi('/path', {});
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const infos = await api.containerEngine.listInfos();
@@ -1776,8 +2067,9 @@ describe('containerEngine', async () => {
 
   test('listInfos with provider option', async () => {
     vi.mocked(containerProviderRegistry.listInfos).mockResolvedValue([]);
+    const disposables: IDisposable[] = [];
 
-    const api = extensionLoader.createApi('/path', {});
+    const api = extensionLoader.createApi('/path', {}, disposables);
     expect(api).toBeDefined();
 
     const infos = await api.containerEngine.listInfos({
@@ -1840,6 +2132,7 @@ describe('extensionContext', async () => {
     expect(telemetry.track).toBeCalledWith('activateExtension', {
       extensionId: 'fooPublisher.fooName',
       extensionVersion: '1.0',
+      duration: expect.any(Number),
     });
 
     expect(safeStorageRegistry.getExtensionStorage).toBeCalledWith('fooPublisher.fooName');
@@ -1853,4 +2146,85 @@ describe('extensionContext', async () => {
     await extensionContext?.secrets.delete('key');
     expect(deleteMock).toBeCalledWith('key');
   });
+});
+
+test('load extensions sequentially', async () => {
+  // Check if missing dependencies are found
+  const extensionId1 = 'foo.extension1';
+  const extensionId2 = 'foo.extension2';
+  const extensionId3 = 'foo.extension3';
+  const unknownExtensionId = 'foo.unknown';
+
+  // extension1 has no dependencies
+  const analyzedExtension1: AnalyzedExtension = {
+    id: extensionId1,
+    manifest: {
+      name: 'hello',
+    },
+  } as AnalyzedExtension;
+
+  // extension2 depends on extension 1
+  const analyzedExtension2: AnalyzedExtension = {
+    id: extensionId2,
+    manifest: {
+      extensionDependencies: [extensionId1],
+      name: 'hello',
+    },
+  } as AnalyzedExtension;
+
+  // extension3 depends on unknown extension unknown
+  const analyzedExtension3: AnalyzedExtension = {
+    id: extensionId3,
+    manifest: {
+      extensionDependencies: [unknownExtensionId],
+      name: 'hello',
+    },
+  } as AnalyzedExtension;
+
+  // mock loadExtension
+  const loadExtensionMock = vi.spyOn(extensionLoader, 'loadExtension');
+  loadExtensionMock.mockImplementation(extension => {
+    if (extension.id === extensionId1) {
+      // extension 1 takes 1s to load
+      return new Promise(resolve => setTimeout(resolve, 1000));
+    } else if (extension.id === extensionId2) {
+      return new Promise(resolve => setTimeout(resolve, 100));
+    } else if (extension.id === extensionId3) {
+      return new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    return Promise.resolve();
+  });
+
+  const start = performance.now();
+  await extensionLoader.loadExtensions([analyzedExtension1, analyzedExtension2, analyzedExtension3]);
+  const end = performance.now();
+
+  const delta = end - start;
+  // delta should be greater than 2s as it's sequential (so 1s + 1s + 100ms) > 2s
+  expect(delta).toBeGreaterThan(2000);
+
+  // check if loadExtension is called in order
+  expect(loadExtensionMock).toBeCalledTimes(3);
+  expect(loadExtensionMock.mock.calls[0][0]).toBe(analyzedExtension1);
+  expect(loadExtensionMock.mock.calls[1][0]).toBe(analyzedExtension2);
+  expect(loadExtensionMock.mock.calls[2][0]).toBe(analyzedExtension3);
+});
+
+test('when loading registry registerRegistry, do not push to disposables', async () => {
+  const disposables: IDisposable[] = [];
+
+  const api = extensionLoader.createApi('/path', {}, disposables);
+  expect(api).toBeDefined();
+
+  const fakeRegistry = {
+    source: 'fake',
+    serverUrl: 'http://fake',
+    username: 'foo',
+    password: 'bar',
+    secret: 'baz',
+  };
+
+  api.registry.registerRegistry(fakeRegistry);
+
+  expect(disposables.length).toBe(0);
 });

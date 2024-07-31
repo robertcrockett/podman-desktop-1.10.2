@@ -18,25 +18,25 @@
 
 import type * as extensionApi from '@podman-desktop/api';
 
-import type { RawThemeContribution } from '/@/plugin/api/theme-info.js';
-import { AppearanceSettings } from '/@/plugin/appearance-settings.js';
-import type { ConfigurationRegistry } from '/@/plugin/configuration-registry.js';
-import type { AnalyzedExtension } from '/@/plugin/extension-loader.js';
-import { Disposable } from '/@/plugin/types/disposable.js';
+import type { Color, ColorDefinition, ColorInfo } from '/@api/color-info.js';
+import type { RawThemeContribution } from '/@api/theme-info.js';
 
 import colorPalette from '../../../../tailwind-color-palette.json';
 import type { ApiSenderType } from './api.js';
-import type { Color, ColorDefinition, ColorInfo } from './api/color-info.js';
+import { AppearanceSettings } from './appearance-settings.js';
+import type { ConfigurationRegistry } from './configuration-registry.js';
+import type { AnalyzedExtension } from './extension-loader.js';
+import { Disposable } from './types/disposable.js';
 
 export class ColorRegistry {
-  #apiSender: ApiSenderType;
-  #configurationRegistry: ConfigurationRegistry;
+  #apiSender: ApiSenderType | undefined;
+  #configurationRegistry: ConfigurationRegistry | undefined;
   #definitions: Map<string, ColorDefinition>;
   #initDone = false;
   #themes: Map<string, Map<string, Color>>;
   #parentThemes: Map<string, string>;
 
-  constructor(apiSender: ApiSenderType, configurationRegistry: ConfigurationRegistry) {
+  constructor(apiSender?: ApiSenderType, configurationRegistry?: ConfigurationRegistry) {
     this.#apiSender = apiSender;
     this.#configurationRegistry = configurationRegistry;
     this.#definitions = new Map();
@@ -109,7 +109,7 @@ export class ColorRegistry {
     const themeIds = themes.map(t => t.id);
 
     // update configuration
-    const disposeConfiguration = this.#configurationRegistry.addConfigurationEnum(
+    const disposeConfiguration = this.#configurationRegistry?.addConfigurationEnum(
       AppearanceSettings.SectionName + '.' + AppearanceSettings.Appearance,
       themeIds,
       AppearanceSettings.SystemEnumValue,
@@ -122,9 +122,13 @@ export class ColorRegistry {
           this.#themes.delete(themeId);
         }
         // remove from configuration
-        disposeConfiguration.dispose();
+        disposeConfiguration?.dispose();
       },
     };
+  }
+
+  public listThemes(): string[] {
+    return Array.from(this.#themes.keys());
   }
 
   protected registerColor(colorId: string, definition: ColorDefinition): void {
@@ -195,13 +199,13 @@ export class ColorRegistry {
   protected notifyUpdate(): void {
     // notify only if ended the initialization
     if (this.#initDone) {
-      this.#apiSender.send('color-updated');
+      this.#apiSender?.send('color-updated');
     }
   }
 
   protected trackChanges(): void {
     // add listener on the configuration change for the theme
-    this.#configurationRegistry.onDidChangeConfiguration(async e => {
+    this.#configurationRegistry?.onDidChangeConfiguration(async e => {
       if (e.key === `${AppearanceSettings.SectionName}.${AppearanceSettings.Appearance}`) {
         // refresh the colors
         this.notifyUpdate();
@@ -227,9 +231,23 @@ export class ColorRegistry {
     this.initGlobalNav();
     this.initSecondaryNav();
     this.initTitlebar();
+    this.initContent();
     this.initInvertContent();
     this.initCardContent();
     this.initInputBox();
+    this.initCheckbox();
+    this.initToggle();
+    this.initTable();
+    this.initDetails();
+    this.initTab();
+    this.initModal();
+    this.initLink();
+    this.initButton();
+    this.initActionButton();
+    this.initTooltip();
+    this.initDropdown();
+    this.initLabel();
+    this.initStatusColors();
   }
 
   protected initGlobalNav(): void {
@@ -411,6 +429,124 @@ export class ColorRegistry {
     });
   }
 
+  protected initContent(): void {
+    const ct = 'content-';
+    this.registerColor(`${ct}breadcrumb`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}breadcrumb-2`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[600],
+    });
+
+    this.registerColor(`${ct}header`, {
+      dark: colorPalette.white,
+      light: colorPalette.charcoal[900],
+    });
+
+    this.registerColor(`${ct}text`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.gray[900],
+    });
+
+    this.registerColor(`${ct}sub-header`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}header-icon`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.purple[700],
+    });
+
+    this.registerColor(`${ct}card-header-text`, {
+      dark: colorPalette.gray[100],
+      light: colorPalette.charcoal[900],
+    });
+
+    this.registerColor(`${ct}card-bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[50],
+    });
+
+    this.registerColor(`${ct}card-hover-bg`, {
+      dark: colorPalette.charcoal[500],
+      light: colorPalette.purple[200],
+    });
+
+    this.registerColor(`${ct}card-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}card-title`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[900],
+    });
+
+    this.registerColor(`${ct}card-light-title`, {
+      dark: colorPalette.gray[800],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}card-inset-bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.dustypurple[200],
+    });
+
+    this.registerColor(`${ct}bg`, {
+      dark: colorPalette.charcoal[700],
+      light: colorPalette.gray[300],
+    });
+
+    this.registerColor(`${ct}card-icon`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}divider`, {
+      dark: colorPalette.charcoal[400],
+      light: colorPalette.gray[700],
+    });
+
+    this.registerColor(`${ct}card-carousel-card-bg`, {
+      dark: colorPalette.charcoal[600],
+      light: colorPalette.gray[300],
+    });
+
+    this.registerColor(`${ct}card-carousel-card-hover-bg`, {
+      dark: colorPalette.charcoal[500],
+      light: colorPalette.gray[200],
+    });
+
+    this.registerColor(`${ct}card-carousel-card-header-text`, {
+      dark: colorPalette.gray[100],
+      light: colorPalette.charcoal[900],
+    });
+
+    this.registerColor(`${ct}card-carousel-card-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.purple[900],
+    });
+
+    this.registerColor(`${ct}card-carousel-nav`, {
+      dark: colorPalette.gray[800],
+      light: colorPalette.gray[400],
+    });
+
+    this.registerColor(`${ct}card-carousel-hover-nav`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.gray[600],
+    });
+
+    this.registerColor(`${ct}card-carousel-disabled-nav`, {
+      dark: colorPalette.charcoal[700],
+      light: colorPalette.gray[200],
+    });
+  }
+
   // input boxes
   protected initInputBox(): void {
     const sNav = 'input-field-';
@@ -482,6 +618,559 @@ export class ColorRegistry {
     this.registerColor(`${sNav}hover-icon`, {
       dark: colorPalette.gray[500],
       light: colorPalette.gray[500],
+    });
+  }
+
+  // checkboxes
+  protected initCheckbox(): void {
+    const sNav = 'input-checkbox-';
+
+    this.registerColor(`${sNav}disabled`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.charcoal[200],
+    });
+    this.registerColor(`${sNav}indeterminate`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[900],
+    });
+    this.registerColor(`${sNav}focused-indeterminate`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+    this.registerColor(`${sNav}checked`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[900],
+    });
+    this.registerColor(`${sNav}focused-checked`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+    this.registerColor(`${sNav}unchecked`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.purple[900],
+    });
+    this.registerColor(`${sNav}focused-unchecked`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+  }
+
+  // toggles
+  protected initToggle(): void {
+    const sNav = 'input-toggle-';
+
+    this.registerColor(`${sNav}off-bg`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${sNav}off-focused-bg`, {
+      dark: colorPalette.purple[700],
+      light: colorPalette.purple[700],
+    });
+    this.registerColor(`${sNav}on-bg`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+    this.registerColor(`${sNav}on-focused-bg`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${sNav}switch`, {
+      dark: colorPalette.white,
+      light: colorPalette.black,
+    });
+    this.registerColor(`${sNav}focused-switch`, {
+      dark: colorPalette.white,
+      light: colorPalette.black,
+    });
+    this.registerColor(`${sNav}on-text`, {
+      dark: colorPalette.white,
+      light: colorPalette.black,
+    });
+    this.registerColor(`${sNav}off-text`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${sNav}off-disabled-bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${sNav}on-disabled-bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${sNav}disabled-switch`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.charcoal[900],
+    });
+  }
+
+  protected initTable(): void {
+    const tab = 'table-';
+    // color of columns names
+    this.registerColor(`${tab}header-text`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.charcoal[200],
+    });
+    // color of up/down arrows when column is not the ordered one
+    this.registerColor(`${tab}header-unsorted`, {
+      dark: colorPalette.charcoal[200],
+      light: colorPalette.charcoal[300],
+    });
+
+    // color for most text in tables
+    this.registerColor(`${tab}body-text`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.charcoal[100],
+    });
+    // color for the text in the main column of the table (generally Name)
+    this.registerColor(`${tab}body-text-highlight`, {
+      dark: colorPalette.gray[300],
+      light: colorPalette.charcoal[700],
+    });
+    // color for the text in second line of main column, in secondary color (generally IDs)
+    this.registerColor(`${tab}body-text-sub-secondary`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+    // color for highlighted text in second line of main column
+    this.registerColor(`${tab}body-text-sub-highlight`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[200],
+    });
+  }
+
+  protected initDetails(): void {
+    const details = 'details-';
+    this.registerColor(`${details}body-text`, {
+      dark: colorPalette.gray[200],
+      light: colorPalette.charcoal[500],
+    });
+    this.registerColor(`${details}empty-icon`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.charcoal[200],
+    });
+    this.registerColor(`${details}empty-header`, {
+      dark: colorPalette.gray[200],
+      light: colorPalette.charcoal[500],
+    });
+    this.registerColor(`${details}empty-sub-header`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.charcoal[500],
+    });
+    this.registerColor(`${details}empty-cmdline-bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.gray[200],
+    });
+    this.registerColor(`${details}empty-cmdline-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[700],
+    });
+    this.registerColor(`${details}bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.gray[50],
+    });
+    this.registerColor(`${details}card-bg`, {
+      dark: colorPalette.charcoal[600],
+      light: colorPalette.gray[300],
+    });
+    this.registerColor(`${details}card-header`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.charcoal[300],
+    });
+    this.registerColor(`${details}card-text`, {
+      dark: colorPalette.white,
+      light: colorPalette.charcoal[900],
+    });
+  }
+
+  protected initTab(): void {
+    const tab = 'tab-';
+    this.registerColor(`${tab}text`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.charcoal[200],
+    });
+    this.registerColor(`${tab}text-highlight`, {
+      dark: colorPalette.white,
+      light: colorPalette.charcoal[300],
+    });
+    this.registerColor(`${tab}highlight`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${tab}hover`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[500],
+    });
+  }
+
+  // modal dialog
+  protected initModal(): void {
+    const modal = 'modal-';
+
+    this.registerColor(`${modal}fade`, {
+      dark: colorPalette.black,
+      light: colorPalette.white,
+    });
+    this.registerColor(`${modal}text`, {
+      dark: colorPalette.gray[500],
+      light: colorPalette.charcoal[300],
+    });
+    this.registerColor(`${modal}text-hover`, {
+      dark: colorPalette.gray[300],
+      light: colorPalette.purple[800],
+    });
+    this.registerColor(`${modal}bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[50],
+    });
+    this.registerColor(`${modal}border`, {
+      dark: colorPalette.charcoal[500],
+      light: colorPalette.gray[500],
+    });
+    this.registerColor(`${modal}header-bg`, {
+      dark: colorPalette.black,
+      light: colorPalette.gray[100],
+    });
+    this.registerColor(`${modal}header-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.purple[500],
+    });
+    this.registerColor(`${modal}header-divider`, {
+      dark: colorPalette.purple[700],
+      light: colorPalette.purple[300],
+    });
+    this.registerColor(`${modal}error-text`, {
+      dark: colorPalette.red[500],
+      light: colorPalette.red[500],
+    });
+    this.registerColor(`${modal}warning-text`, {
+      dark: colorPalette.amber[400],
+      light: colorPalette.amber[400],
+    });
+  }
+
+  // links
+  protected initLink(): void {
+    const link = 'link';
+
+    this.registerColor(`${link}`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+    this.registerColor(`${link}-hover-bg`, {
+      dark: colorPalette.white + '2',
+      light: colorPalette.black + '2',
+    });
+  }
+
+  // button
+  protected initButton(): void {
+    const button = 'button-';
+
+    this.registerColor(`${button}primary-bg`, {
+      dark: colorPalette.purple[600],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${button}primary-hover-bg`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+    this.registerColor(`${button}secondary`, {
+      dark: colorPalette.gray[200],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${button}secondary-hover`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+    this.registerColor(`${button}text`, {
+      dark: colorPalette.white,
+      light: colorPalette.white,
+    });
+    this.registerColor(`${button}disabled`, {
+      dark: colorPalette.charcoal[300],
+      light: colorPalette.gray[600],
+    });
+    this.registerColor(`${button}disabled-text`, {
+      dark: colorPalette.charcoal[50],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${button}danger-border`, {
+      dark: colorPalette.red[500],
+      light: colorPalette.red[700],
+    });
+    this.registerColor(`${button}danger-bg`, {
+      dark: colorPalette.transparent,
+      light: colorPalette.transparent,
+    });
+    this.registerColor(`${button}danger-text`, {
+      dark: colorPalette.red[500],
+      light: colorPalette.red[700],
+    });
+    this.registerColor(`${button}danger-hover-text`, {
+      dark: colorPalette.white,
+      light: colorPalette.white,
+    });
+    this.registerColor(`${button}danger-hover-bg`, {
+      dark: colorPalette.red[600],
+      light: colorPalette.red[600],
+    });
+    this.registerColor(`${button}danger-disabled-border`, {
+      dark: colorPalette.charcoal[50],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${button}danger-disabled-text`, {
+      dark: colorPalette.charcoal[50],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${button}danger-disabled-bg`, {
+      dark: colorPalette.transparent,
+      light: colorPalette.transparent,
+    });
+    this.registerColor(`${button}tab-border`, {
+      dark: colorPalette.transparent,
+      light: colorPalette.transparent,
+    });
+    this.registerColor(`${button}tab-border-selected`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${button}tab-hover-border`, {
+      dark: colorPalette.charcoal[100],
+      light: colorPalette.gray[600],
+    });
+    this.registerColor(`${button}tab-text`, {
+      dark: colorPalette.gray[600],
+      light: colorPalette.charcoal[200],
+    });
+    this.registerColor(`${button}tab-text-selected`, {
+      dark: colorPalette.white,
+      light: colorPalette.black,
+    });
+    this.registerColor(`${button}link-text`, {
+      dark: colorPalette.purple[400],
+      light: colorPalette.purple[700],
+    });
+    this.registerColor(`${button}link-hover-bg`, {
+      dark: colorPalette.white + '2',
+      light: colorPalette.black + '2',
+    });
+    this.registerColor(`${button}help-link-text`, {
+      dark: colorPalette.gray[100],
+      light: colorPalette.charcoal[900],
+    });
+  }
+
+  protected initActionButton(): void {
+    const ab = 'action-button-';
+
+    this.registerColor(`${ab}text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[500],
+    });
+    this.registerColor(`${ab}bg`, {
+      dark: colorPalette.charcoal[900],
+      light: colorPalette.gray[400],
+    });
+    this.registerColor(`${ab}hover-bg`, {
+      dark: colorPalette.charcoal[600],
+      light: colorPalette.gray[50],
+    });
+    this.registerColor(`${ab}hover-text`, {
+      dark: colorPalette.purple[600],
+      light: colorPalette.purple[500],
+    });
+
+    this.registerColor(`${ab}primary-text`, {
+      dark: colorPalette.purple[600],
+      light: colorPalette.purple[600],
+    });
+    this.registerColor(`${ab}primary-hover-text`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+
+    this.registerColor(`${ab}disabled-text`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.gray[900],
+    });
+
+    this.registerColor(`${ab}details-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[900],
+    });
+    this.registerColor(`${ab}details-bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[50],
+    });
+    this.registerColor(`${ab}details-hover-text`, {
+      dark: colorPalette.purple[600],
+      light: colorPalette.purple[500],
+    });
+
+    this.registerColor(`${ab}details-disabled-text`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.gray[900],
+    });
+    this.registerColor(`${ab}details-disabled-bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[50],
+    });
+
+    this.registerColor(`${ab}spinner`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+  }
+
+  // tooltip
+  protected initTooltip(): void {
+    const tooltip = 'tooltip-';
+
+    this.registerColor(`${tooltip}bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[50],
+    });
+    this.registerColor(`${tooltip}text`, {
+      dark: colorPalette.white,
+      light: colorPalette.black,
+    });
+    this.registerColor(`${tooltip}border`, {
+      dark: colorPalette.charcoal[500],
+      light: colorPalette.gray[500],
+    });
+  }
+
+  protected initDropdown(): void {
+    const dropdown = 'dropdown-';
+
+    this.registerColor(`${dropdown}bg`, {
+      dark: colorPalette.charcoal[600],
+      light: colorPalette.gray[100],
+    });
+    this.registerColor(`${dropdown}ring`, {
+      dark: colorPalette.purple[900],
+      light: colorPalette.gray[500],
+    });
+    this.registerColor(`${dropdown}hover-ring`, {
+      dark: colorPalette.purple[700],
+      light: colorPalette.purple[300],
+    });
+    this.registerColor(`${dropdown}divider`, {
+      dark: colorPalette.charcoal[600],
+      light: colorPalette.gray[100],
+    });
+
+    this.registerColor(`${dropdown}item-text`, {
+      dark: colorPalette.gray[400],
+      light: colorPalette.charcoal[600],
+    });
+    this.registerColor(`${dropdown}item-hover-bg`, {
+      dark: colorPalette.black,
+      light: colorPalette.gray[300],
+    });
+    this.registerColor(`${dropdown}item-hover-text`, {
+      dark: colorPalette.purple[500],
+      light: colorPalette.purple[500],
+    });
+
+    this.registerColor(`${dropdown}disabled-item-text`, {
+      dark: colorPalette.gray[900],
+      light: colorPalette.charcoal[100],
+    });
+    this.registerColor(`${dropdown}disabled-item-bg`, {
+      dark: colorPalette.charcoal[800],
+      light: colorPalette.gray[200],
+    });
+  }
+
+  // labels
+  protected initLabel(): void {
+    const label = 'label-';
+
+    this.registerColor(`${label}bg`, {
+      dark: colorPalette.charcoal[500],
+      light: colorPalette.purple[200],
+    });
+    this.registerColor(`${label}text`, {
+      dark: colorPalette.gray[500],
+      light: colorPalette.charcoal[300],
+    });
+  }
+
+  protected initStatusColors(): void {
+    const status = 'status-';
+
+    // Podman & Kubernetes
+    this.registerColor(`${status}running`, {
+      dark: colorPalette.green[400],
+      light: colorPalette.green[400],
+    });
+    // Kubernetes only
+    this.registerColor(`${status}terminated`, {
+      dark: colorPalette.red[500],
+      light: colorPalette.red[500],
+    });
+    this.registerColor(`${status}waiting`, {
+      dark: colorPalette.amber[600],
+      light: colorPalette.amber[600],
+    });
+    // Podman only
+    this.registerColor(`${status}starting`, {
+      dark: colorPalette.green[600],
+      light: colorPalette.green[600],
+    });
+    // Stopped & Exited are the same color / same thing in the eyes of statuses
+    this.registerColor(`${status}stopped`, {
+      dark: colorPalette.gray[300],
+      light: colorPalette.gray[600],
+    });
+    this.registerColor(`${status}exited`, {
+      dark: colorPalette.gray[300],
+      light: colorPalette.gray[600],
+    });
+    this.registerColor(`${status}not-running`, {
+      dark: colorPalette.gray[700],
+      light: colorPalette.gray[900],
+    });
+    // "Warning"
+    this.registerColor(`${status}paused`, {
+      dark: colorPalette.amber[600],
+      light: colorPalette.amber[600],
+    });
+    this.registerColor(`${status}degraded`, {
+      dark: colorPalette.amber[700],
+      light: colorPalette.amber[700],
+    });
+    // Others
+    this.registerColor(`${status}created`, {
+      dark: colorPalette.green[300],
+      light: colorPalette.green[300],
+    });
+    this.registerColor(`${status}dead`, {
+      dark: colorPalette.red[500],
+      light: colorPalette.red[500],
+    });
+    // If we don't know the status, use gray
+    this.registerColor(`${status}unknown`, {
+      dark: colorPalette.gray[100],
+      light: colorPalette.gray[400],
+    });
+    // Connections / login
+    this.registerColor(`${status}connected`, {
+      dark: colorPalette.green[600],
+      light: colorPalette.green[600],
+    });
+    this.registerColor(`${status}disconnected`, {
+      dark: colorPalette.gray[500],
+      light: colorPalette.gray[800],
+    });
+    // Scaled / updated, use blue as it's a 'neutral' color
+    // to indicate that it's informative but not a problem
+    this.registerColor(`${status}updated`, {
+      dark: colorPalette.sky[500],
+      light: colorPalette.sky[500],
     });
   }
 }

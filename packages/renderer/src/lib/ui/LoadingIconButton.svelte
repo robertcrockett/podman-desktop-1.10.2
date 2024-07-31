@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
+import { Tooltip } from '@podman-desktop/ui-svelte';
 
 import type { ILoadingStatus } from '../preferences/Util';
 import LoadingIcon from './LoadingIcon.svelte';
-import Tooltip from './Tooltip.svelte';
 import { capitalize } from './Util';
 
 export let action: string;
@@ -35,6 +35,9 @@ $: {
       case 'update':
         disable = state?.status === 'unknown';
         break;
+      case 'edit':
+        disable = state?.status !== 'started' && state?.status !== 'stopped';
+        break;
     }
   }
 }
@@ -42,13 +45,13 @@ $: {
 $: loading = state?.inProgress && action === state?.action;
 
 $: style = disable
-  ? 'text-gray-900 cursor-not-allowed'
+  ? 'text-[var(--pd-action-button-disabled-text)] cursor-not-allowed'
   : color === 'secondary'
-    ? 'text-white hover:text-gray-700'
-    : 'text-purple-600 hover:text-purple-500';
+    ? 'text-[var(--pd-action-button-text)] hover:text-[var(--pd-action-button-hover-text)]'
+    : 'text-[var(--pd-action-button-primary-text)] hover:text-[var(--pd-action-button-primary-hover-text)]';
 </script>
 
-<Tooltip tip="{tooltip}" bottom>
+<Tooltip bottom tip="{tooltip}">
   <button aria-label="{capitalize(action)}" class="mx-2.5 my-2 {style}" on:click="{clickAction}" disabled="{disable}">
     <LoadingIcon
       icon="{icon}"

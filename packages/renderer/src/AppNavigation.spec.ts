@@ -25,8 +25,8 @@ import type { TinroRouteMeta } from 'tinro';
 import { beforeAll, expect, test, vi } from 'vitest';
 
 import * as kubeContextStore from '/@/stores/kubernetes-contexts-state';
+import type { ContributionInfo } from '/@api/contribution-info';
 
-import type { ContributionInfo } from '../../main/src/plugin/api/contribution-info';
 import AppNavigation from './AppNavigation.svelte';
 import { contributions } from './stores/contribs';
 
@@ -51,6 +51,8 @@ test('Test rendering of the navigation bar with empty items', () => {
   vi.mocked(kubeContextStore).kubernetesCurrentContextServices = readable<KubernetesObject[]>([]);
   vi.mocked(kubeContextStore).kubernetesCurrentContextIngresses = readable<KubernetesObject[]>([]);
   vi.mocked(kubeContextStore).kubernetesCurrentContextRoutes = readable<KubernetesObject[]>([]);
+  vi.mocked(kubeContextStore).kubernetesCurrentContextNodes = readable<KubernetesObject[]>([]);
+  vi.mocked(kubeContextStore).kubernetesCurrentContextPersistentVolumeClaims = readable<KubernetesObject[]>([]);
 
   render(AppNavigation, {
     meta,

@@ -20,7 +20,7 @@ import * as crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import * as fs from 'node:fs';
 import path from 'node:path';
-import { type Stream, Writable } from 'node:stream';
+import { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import type * as containerDesktopAPI from '@podman-desktop/api';
@@ -31,9 +31,6 @@ import moment from 'moment';
 import StreamValues from 'stream-json/streamers/StreamValues.js';
 
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
-
-import { isWindows } from '../util.js';
-import type { ApiSenderType } from './api.js';
 import type {
   ContainerCreateOptions,
   ContainerExportOptions,
@@ -47,18 +44,21 @@ import type {
   SimpleContainerInfo,
   VolumeCreateOptions,
   VolumeCreateResponseInfo,
-} from './api/container-info.js';
-import type { ContainerInspectInfo } from './api/container-inspect-info.js';
-import type { ContainerStatsInfo } from './api/container-stats-info.js';
-import type { HistoryInfo } from './api/history-info.js';
-import type { BuildImageOptions, ImageInfo, ListImagesOptions, PodmanListImagesOptions } from './api/image-info.js';
-import type { ImageInspectInfo } from './api/image-inspect-info.js';
-import type { ManifestCreateOptions, ManifestInspectInfo } from './api/manifest-info.js';
-import type { NetworkInspectInfo } from './api/network-info.js';
+} from '/@api/container-info.js';
+import type { ContainerInspectInfo } from '/@api/container-inspect-info.js';
+import type { ContainerStatsInfo } from '/@api/container-stats-info.js';
+import type { HistoryInfo } from '/@api/history-info.js';
+import type { BuildImageOptions, ImageInfo, ListImagesOptions, PodmanListImagesOptions } from '/@api/image-info.js';
+import type { ImageInspectInfo } from '/@api/image-inspect-info.js';
+import type { ManifestCreateOptions, ManifestInspectInfo } from '/@api/manifest-info.js';
+import type { NetworkInspectInfo } from '/@api/network-info.js';
+import type { ProviderContainerConnectionInfo } from '/@api/provider-info.js';
+import type { PullEvent } from '/@api/pull-event.js';
+import type { VolumeInfo, VolumeInspectInfo, VolumeListInfo } from '/@api/volume-info.js';
+
+import { isWindows } from '../util.js';
+import type { ApiSenderType } from './api.js';
 import type { PodCreateOptions, PodInfo, PodInspectInfo } from './api/pod-info.js';
-import type { ProviderContainerConnectionInfo } from './api/provider-info.js';
-import type { PullEvent } from './api/pull-event.js';
-import type { VolumeInfo, VolumeInspectInfo, VolumeListInfo } from './api/volume-info.js';
 import type { ConfigurationRegistry } from './configuration-registry.js';
 import type {
   ContainerCreateMountOption,
@@ -541,7 +541,7 @@ export class ContainerProviderRegistry {
                 engineName: provider.name,
                 engineId: provider.id,
                 engineType: provider.connection.type,
-                StartedAt: container.StartedAt || '',
+                StartedAt: container.StartedAt ?? '',
                 Status: container.Status,
                 ImageBase64RepoTag: Buffer.from(container.Image, 'binary').toString('base64'),
               };
@@ -637,23 +637,33 @@ export class ContainerProviderRegistry {
           return fetchedImages;
         }
 
-        // Transform fetched images to include engine name and ID
-        return fetchedImages.map(image => ({
-          ...image,
-          engineName: provider.name,
-          engineId: provider.id,
-          // Using guessIsManifest, determine if the image is a manifest and set isManifest accordingly
-          // NOTE: This is a workaround until we have a better way to determine if an image is a manifest
-          // and may result in false positives until issue: https://github.com/containers/podman/issues/22184 is resolved
-          isManifest: guessIsManifest(image, provider.connection.type),
+        return Promise.all(
+          Array.from(fetchedImages).map(async image => {
+            const baseImage = {
+              ...image,
+              engineName: provider.name,
+              engineId: provider.id,
+              isManifest: guessIsManifest(image, provider.connection.type),
+              Id: image.Digest ? `sha256:${image.Id}` : image.Id,
+              Digest: image.Digest || `sha256:${image.Id}`,
+            };
 
-          // Podman Id does not include the sha256 prefix, so we add it here (it's the Digest using Podman API)
-          Id: image.Digest ? `sha256:${image.Id}` : image.Id,
+            // If the image is a manifest, inspect the manifest to get the digests of the images part of the manifest
+            // however, we do not **ever** want this to block the UI / operation, so if this fails, output to console and continue
+            if (baseImage.isManifest && provider.libpodApi) {
+              try {
+                const manifestInspectInfo = await provider.libpodApi.podmanInspectManifest(image.Id);
+                if (manifestInspectInfo?.manifests) {
+                  baseImage.manifests = manifestInspectInfo.manifests;
+                }
+              } catch (error) {
+                console.error('Error while inspecting manifest', error);
+              }
+            }
 
-          // Compat API provider does not add the Digest field.
-          // if it is missing, add it as 'sha256:image.Id'
-          Digest: image.Digest || `sha256:${image.Id}`,
-        }));
+            return baseImage;
+          }),
+        );
       }),
     );
 
@@ -1094,7 +1104,7 @@ export class ContainerProviderRegistry {
     try {
       const engine = this.getMatchingEngine(engineId);
       const image = engine.getImage(imageTag);
-      const authconfig = authInfo || this.imageRegistry.getAuthconfigForImage(imageTag);
+      const authconfig = authInfo ?? this.imageRegistry.getAuthconfigForImage(imageTag);
       const pushStream = await image.push({
         authconfig,
         abortSignal: abortController?.signal,
@@ -1867,7 +1877,7 @@ export class ContainerProviderRegistry {
     }
   }
 
-  async createContainer(engineId: string, options: ContainerCreateOptions): Promise<{ id: string }> {
+  async createContainer(engineId: string, options: ContainerCreateOptions): Promise<{ id: string; engineId: string }> {
     let telemetryOptions = {};
     try {
       let container: Dockerode.Container;
@@ -1878,13 +1888,11 @@ export class ContainerProviderRegistry {
       }
 
       const engine = this.internalProviders.get(engineId);
-      if (engine) {
+      if (engine && (options.start === true || options.start === undefined)) {
+        await container.start();
         await this.attachToContainer(engine, container, options.Tty, options.OpenStdin);
-        if (options.start === true || options.start === undefined) {
-          await container.start();
-        }
       }
-      return { id: container.id };
+      return { id: container.id, engineId };
     } catch (error) {
       telemetryOptions = { error: error };
       throw error;
@@ -1911,7 +1919,7 @@ export class ContainerProviderRegistry {
       const envFiles = options.EnvFiles || [];
       const envFileContent = await this.getEnvFileParser().parseEnvFiles(envFiles);
 
-      const env = options.Env || [];
+      const env = options.Env ?? [];
       env.push(...envFileContent);
       options.Env = env;
       // remove EnvFiles from options
@@ -2344,7 +2352,7 @@ export class ContainerProviderRegistry {
         options.containerFile = options.containerFile.replace(/\\/g, '/');
       }
 
-      let streamingPromise: Stream;
+      let streamingPromise: NodeJS.ReadableStream;
       try {
         const buildOptions: ImageBuildOptions = {
           registryconfig,
@@ -2384,10 +2392,7 @@ export class ContainerProviderRegistry {
         if (options?.pull) {
           buildOptions.pull = options.pull;
         }
-        streamingPromise = (await matchingContainerProviderApi.buildImage(
-          tarStream,
-          buildOptions,
-        )) as unknown as Stream;
+        streamingPromise = await matchingContainerProviderApi.buildImage(tarStream, buildOptions);
       } catch (error: unknown) {
         console.log('error in buildImage', error);
         const errorMessage = error instanceof Error ? error.message : '' + error;

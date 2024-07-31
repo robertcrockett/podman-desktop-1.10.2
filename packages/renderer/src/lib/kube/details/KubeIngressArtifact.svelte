@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { V1IngressSpec } from '@kubernetes/client-node';
+import { Link } from '@podman-desktop/ui-svelte';
 
-import Link from '../../ui/Link.svelte';
-import Cell from './ui/Cell.svelte';
-import Title from './ui/Title.svelte';
+import Cell from '/@/lib/details/DetailsCell.svelte';
+import Title from '/@/lib/details/DetailsTitle.svelte';
 
 // Props for Ingress artifact and Status
 export let artifact: V1IngressSpec | undefined;
@@ -66,9 +66,9 @@ export let artifact: V1IngressSpec | undefined;
               Path: {path.path}
               {#if rule.host}
                 • Link:
-                <Link
-                  externalRef="{artifact.tls && artifact.tls.length > 0 ? 'https' : 'http'}://{rule.host}{path.path}">
-                  {artifact.tls && artifact.tls.length > 0 ? 'https' : 'http'}://{rule.host}{path.path}
+                {@const link = `${artifact.tls && artifact.tls.length > 0 ? 'https' : 'http'}://${rule.host}${path.path}`}
+                <Link on:click="{() => window.openExternal(link)}">
+                  {link}
                 </Link>
               {/if}
               {#if path.backend.service}

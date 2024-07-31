@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { V1ServiceSpec } from '@kubernetes/client-node';
 
-import Cell from './ui/Cell.svelte';
-import Title from './ui/Title.svelte';
+import Cell from '/@/lib/details/DetailsCell.svelte';
+import Title from '/@/lib/details/DetailsTitle.svelte';
 
 export let artifact: V1ServiceSpec | undefined;
 </script>
@@ -34,7 +34,9 @@ export let artifact: V1ServiceSpec | undefined;
       <Cell>Ports</Cell>
       <Cell>
         {#each artifact.ports as port}
-          <div>{port.name ? port.name + ':' : ''}{port.port}/{port.protocol}</div>
+          <div>
+            {port.name ? port.name + ':' : ''}{port.port}{port.nodePort ? ':' + port.nodePort : ''}/{port.protocol}
+          </div>
         {/each}
       </Cell>
     </tr>

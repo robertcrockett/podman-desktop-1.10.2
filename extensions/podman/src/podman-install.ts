@@ -52,18 +52,21 @@ export function getBundledPodmanVersion(): string {
 }
 
 export interface PodmanInfo {
-  podmanVersion: string;
+  podmanVersion?: string;
   lastUpdateCheck: number;
   ignoreVersionUpdate?: string;
 }
 
 export class PodmanInfoImpl implements PodmanInfo {
+  private podmanInfo: PodmanInfo;
   constructor(
-    private podmanInfo: PodmanInfo,
+    podmanInfoValue: PodmanInfo | undefined,
     private readonly storagePath: string,
   ) {
-    if (!podmanInfo) {
+    if (!podmanInfoValue) {
       this.podmanInfo = { lastUpdateCheck: 0 } as PodmanInfo;
+    } else {
+      this.podmanInfo = podmanInfoValue;
     }
   }
 
@@ -74,7 +77,7 @@ export class PodmanInfoImpl implements PodmanInfo {
     }
   }
 
-  get podmanVersion(): string {
+  get podmanVersion(): string | undefined {
     return this.podmanInfo.podmanVersion;
   }
 
@@ -89,7 +92,7 @@ export class PodmanInfoImpl implements PodmanInfo {
     return this.podmanInfo.lastUpdateCheck;
   }
 
-  get ignoreVersionUpdate(): string {
+  get ignoreVersionUpdate(): string | undefined {
     return this.podmanInfo.ignoreVersionUpdate;
   }
 
@@ -110,7 +113,7 @@ export class PodmanInfoImpl implements PodmanInfo {
   }
 }
 
-interface Installer {
+export interface Installer {
   getPreflightChecks(): extensionApi.InstallCheck[] | undefined;
   getUpdatePreflightChecks(): extensionApi.InstallCheck[] | undefined;
   install(): Promise<boolean>;
@@ -119,12 +122,12 @@ interface Installer {
 }
 export interface UpdateCheck {
   hasUpdate: boolean;
-  installedVersion: string;
-  bundledVersion: string;
+  installedVersion?: string;
+  bundledVersion?: string;
 }
 
 export class PodmanInstall {
-  private podmanInfo: PodmanInfo;
+  private podmanInfo: PodmanInfo | undefined;
 
   private installers = new Map<NodeJS.Platform, Installer>();
 
@@ -144,6 +147,10 @@ export class PodmanInstall {
   }
 
   public async doInstallPodman(provider: extensionApi.Provider): Promise<void> {
+    if (!this.podmanInfo) {
+      console.error('The podman extension has not been successfully initialized');
+      throw new Error('The podman extension has not been successfully initialized');
+    }
     const dialogResult = await extensionApi.window.showInformationMessage(
       `Podman is not installed on this system, would you like to install Podman ${getBundledPodmanVersion()}?`,
       'Yes',
@@ -187,8 +194,11 @@ export class PodmanInstall {
     }
     const installer = this.getInstaller();
     const bundledVersion = getBundledPodmanVersion();
-
-    if (installer?.requireUpdate(installedVersion) && this.podmanInfo.ignoreVersionUpdate !== bundledVersion) {
+    if (
+      installedVersion &&
+      installer?.requireUpdate(installedVersion) &&
+      this.podmanInfo.ignoreVersionUpdate !== bundledVersion
+    ) {
       return { installedVersion, hasUpdate: true, bundledVersion };
     }
     return { installedVersion, hasUpdate: false, bundledVersion };
@@ -246,7 +256,7 @@ export class PodmanInstall {
     // if (v4 --> v5)
     if (
       installedPodman.version.startsWith('4.') &&
-      updateInfo.bundledVersion.startsWith('5.') &&
+      updateInfo.bundledVersion?.startsWith('5.') &&
       this.providerCleanup
     ) {
       // prompt if user wants to wipe all data
@@ -290,9 +300,17 @@ export class PodmanInstall {
     return true;
   }
 
-  public async performUpdate(provider: extensionApi.Provider, installedPodman: InstalledPodman): Promise<void> {
+  public async performUpdate(
+    provider: extensionApi.Provider,
+    installedPodman: InstalledPodman | undefined,
+  ): Promise<void> {
+    if (!this.podmanInfo) {
+      console.error('The podman extension has not been successfully initialized');
+      throw new Error('The podman extension has not been successfully initialized');
+    }
+
     const updateInfo = await this.checkForUpdate(installedPodman);
-    if (updateInfo.hasUpdate) {
+    if (updateInfo.hasUpdate && updateInfo.installedVersion) {
       // before updating, podman machines need to be stopped if some of them are running
       const noRunningMachine = await this.stopPodmanMachinesIfAnyBeforeUpdating();
       if (!noRunningMachine) {
@@ -301,7 +319,10 @@ export class PodmanInstall {
       }
 
       // podman v4 -> v5 migration: ask to wipe all data before doing the update
-      const wipeAllDataCompleted = await this.wipeAllDataBeforeUpdatingToV5(installedPodman, updateInfo);
+      const wipeAllDataCompleted = await this.wipeAllDataBeforeUpdatingToV5(
+        { version: updateInfo.installedVersion },
+        updateInfo,
+      );
       if (!wipeAllDataCompleted) {
         await extensionApi.window.showWarningMessage(
           'Podman update has been canceled. It is recommended to backup OCI images or containers before resuming the update procedure',
@@ -317,23 +338,25 @@ export class PodmanInstall {
         'Ignore',
       );
       if (answer === 'Yes') {
-        await this.getInstaller().update();
-        this.podmanInfo.podmanVersion = updateInfo.bundledVersion;
-        provider.updateDetectionChecks(getDetectionChecks(installedPodman));
-        provider.updateVersion(updateInfo.bundledVersion);
-        this.podmanInfo.ignoreVersionUpdate = undefined;
-        extensionApi.context.setValue(
-          ROOTFUL_MACHINE_INIT_SUPPORTED_KEY,
-          isRootfulMachineInitSupported(updateInfo.bundledVersion),
-        );
-        extensionApi.context.setValue(
-          USER_MODE_NETWORKING_SUPPORTED_KEY,
-          isUserModeNetworkingSupported(updateInfo.bundledVersion),
-        );
-        extensionApi.context.setValue(
-          START_NOW_MACHINE_INIT_SUPPORTED_KEY,
-          isStartNowAtMachineInitSupported(updateInfo.bundledVersion),
-        );
+        await this.getInstaller()?.update();
+        if (updateInfo.bundledVersion) {
+          this.podmanInfo.podmanVersion = updateInfo.bundledVersion;
+          provider.updateDetectionChecks(getDetectionChecks(installedPodman));
+          provider.updateVersion(updateInfo.bundledVersion);
+          this.podmanInfo.ignoreVersionUpdate = undefined;
+          extensionApi.context.setValue(
+            ROOTFUL_MACHINE_INIT_SUPPORTED_KEY,
+            isRootfulMachineInitSupported(updateInfo.bundledVersion),
+          );
+          extensionApi.context.setValue(
+            USER_MODE_NETWORKING_SUPPORTED_KEY,
+            isUserModeNetworkingSupported(updateInfo.bundledVersion),
+          );
+          extensionApi.context.setValue(
+            START_NOW_MACHINE_INIT_SUPPORTED_KEY,
+            isStartNowAtMachineInitSupported(updateInfo.bundledVersion),
+          );
+        }
       } else if (answer === 'Ignore') {
         this.podmanInfo.ignoreVersionUpdate = updateInfo.bundledVersion;
       }
@@ -361,7 +384,7 @@ export class PodmanInstall {
     return this.installers.has(os.platform());
   }
 
-  private getInstaller(): Installer | undefined {
+  protected getInstaller(): Installer | undefined {
     return this.installers.get(os.platform());
   }
 
@@ -444,8 +467,9 @@ export class WinInstaller extends BaseInstaller {
             extensionApi.window.showNotification({ body: 'Podman is successfully installed.' });
           } catch (err) {
             //check if user cancelled installation see https://learn.microsoft.com/en-us/previous-versions//aa368542(v=vs.85)
-            if ((err as extensionApi.RunError) && err.exitCode !== 1602 && err.exitCode !== 0) {
-              throw new Error(err.message);
+            const runError = err as extensionApi.RunError;
+            if (runError && runError.exitCode !== 1602 && runError.exitCode !== 0) {
+              throw new Error(runError.message);
             }
           }
           return true;
@@ -713,9 +737,10 @@ class WSL2Check extends BaseCheck {
 
       return true;
     } catch (error) {
-      let message = error.message ? `${error.message}\n` : '';
-      message += error.stdout || '';
-      message += error.stderr || '';
+      const runError = error as extensionApi.RunError;
+      let message = runError.message ? `${runError.message}\n` : '';
+      message += runError.stdout || '';
+      message += runError.stderr || '';
       throw new Error(message);
     }
   }
@@ -729,9 +754,10 @@ class WSL2Check extends BaseCheck {
       // we only return true for the WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED error code
       // as other errors may not be connected to a reboot, like
       // WSL_E_DEFAULT_DISTRO_NOT_FOUND = wsl was installed without the default distro
-      if (error.stdout.includes('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED')) {
+      const runError = error as extensionApi.RunError;
+      if (runError.stdout.includes('Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED')) {
         return true;
-      } else if (error.stdout.includes('Wsl/WSL_E_DEFAULT_DISTRO_NOT_FOUND')) {
+      } else if (runError.stdout.includes('Wsl/WSL_E_DEFAULT_DISTRO_NOT_FOUND')) {
         // treating this log differently as we install wsl without any distro
         console.log('WSL has been installed without the default distribution');
       } else {
@@ -751,13 +777,15 @@ class WSLVersionCheck extends BaseCheck {
     try {
       const wslHelper = new WslHelper();
       const wslVersionData = await wslHelper.getWSLVersionData();
-      if (compare(wslVersionData.wslVersion, this.minVersion, '>=')) {
-        return this.createSuccessfulResult();
-      } else {
-        return this.createFailureResult({
-          description: `Your WSL version is ${wslVersionData.wslVersion} but it should be >= ${this.minVersion}.`,
-          docLinksDescription: `Call 'wsl --update' to update your WSL installation. If you do not have access to the Windows store you can run 'wsl --update --web-download'. If you still receive an error please contact your IT administator as 'Windows Store Applications' may have been disabled.`,
-        });
+      if (wslVersionData.wslVersion) {
+        if (compare(wslVersionData.wslVersion, this.minVersion, '>=')) {
+          return this.createSuccessfulResult();
+        } else {
+          return this.createFailureResult({
+            description: `Your WSL version is ${wslVersionData.wslVersion} but it should be >= ${this.minVersion}.`,
+            docLinksDescription: `Call 'wsl --update' to update your WSL installation. If you do not have access to the Windows store you can run 'wsl --update --web-download'. If you still receive an error please contact your IT administator as 'Windows Store Applications' may have been disabled.`,
+          });
+        }
       }
     } catch (err) {
       // ignore error

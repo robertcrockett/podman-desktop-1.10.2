@@ -2,7 +2,8 @@
 import { faCircleInfo, faXmark } from '@fortawesome/free-solid-svg-icons';
 import Fa from 'svelte-fa';
 
-import type { NotificationCard } from '../../../../main/src/plugin/api/notification';
+import type { NotificationCard } from '/@api/notification';
+
 import Markdown from '../markdown/Markdown.svelte';
 
 export let notification: NotificationCard;
@@ -21,7 +22,7 @@ async function removeNotification(id: number) {
     </div>
     <div class="flex flex-col text-sm space-y-2">
       <div class="font-bold" aria-label="Notification title">{notification.title}</div>
-      <div aria-label="Notification description"><Markdown>{notification.body || ''}</Markdown></div>
+      <div aria-label="Notification description"><Markdown>{notification.body ?? ''}</Markdown></div>
     </div>
   </div>
   {#if notification.markdownActions}

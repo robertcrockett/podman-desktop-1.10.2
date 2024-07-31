@@ -2,7 +2,7 @@
   "name": "podman",
   "displayName": "Podman",
   "description": "Integration for Podman and Podman Machines",
-  "version": "1.10.1",
+  "version": "1.11.1",
   "icon": "icon.png",
   "type": "module",
   "publisher": "podman-desktop",
@@ -169,6 +169,12 @@
           "type": "boolean",
           "default": false,
           "description": "Docker compatibility mode is a feature that allows you to use Podman as a drop-in replacement for Docker-compatible CLI tools. Podman will automatically emulate a Docker API socket connection (typically) to /var/run/docker.sock. NOTE: This requires administrative privileges.",
+          "when": "isMac"
+        },
+        "podman.setting.rosetta": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use macOS Rosetta to run x86_64 Linux binaries on Podman 5.1.0 and above, disabling will use qemu. NOTE: This setting is only applied when creating new machines.",
           "when": "isMac"
         }
       }
@@ -366,13 +372,13 @@
     "ps-list": "^8.1.1"
   },
   "devDependencies": {
-    "adm-zip": "^0.5.12",
+    "adm-zip": "^0.5.14",
     "hasha": "^6.0.0",
     "mkdirp": "^3.0.1",
-    "nock": "^14.0.0-beta.6",
-    "octokit": "^3.2.0",
-    "tsx": "^4.7.3",
-    "vite": "^5.2.10",
-    "vitest": "^1.5.2"
+    "nock": "^14.0.0-beta.7",
+    "octokit": "^4.0.2",
+    "tsx": "^4.15.6",
+    "vite": "^5.3.1",
+    "vitest": "^1.6.0"
   }
 }

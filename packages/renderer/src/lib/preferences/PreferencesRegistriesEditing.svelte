@@ -1,15 +1,12 @@
 <script lang="ts">
 import { faPlusCircle, faTrash, faUser, faUserPen } from '@fortawesome/free-solid-svg-icons';
 import type * as containerDesktopAPI from '@podman-desktop/api';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, DropdownMenu, Input } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 
 import PasswordInput from '/@/lib/ui/PasswordInput.svelte';
 
 import { registriesInfos, registriesSuggestedInfos } from '../../stores/registries';
-import Button from '../ui/Button.svelte';
-import DropdownMenu from '../ui/DropdownMenu.svelte';
-import DropdownMenuItem from '../ui/DropDownMenuItem.svelte';
 import SettingsPage from './SettingsPage.svelte';
 
 // contains the original instances of registries when user clicks on `Edit password` menu item
@@ -235,10 +232,13 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
     </Button>
   </div>
 
-  <div class="container bg-charcoal-600 rounded-md p-3">
+  <div class="container bg-[var(--pd-invert-content-card-bg)] rounded-md p-3">
     <!-- Registries table start -->
     <div class="w-full border-t border-b border-gray-900" role="table" aria-label="Registries">
-      <div class="flex w-full space-x-2" role="rowgroup" aria-label="header">
+      <div
+        class="flex w-full space-x-2 text-[var(--pd-invert-content-card-header-text)]"
+        role="rowgroup"
+        aria-label="header">
         <div class="text-left py-4 text-sm font-bold w-2/5 pl-5" role="columnheader">Registry Location</div>
         <div class="text-left py-4 text-sm font-bold w-1/5" role="columnheader">Username</div>
         <div class="text-left py-4 text-sm font-bold w-1/5" role="columnheader">Password</div>
@@ -248,7 +248,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
       {#each $registriesInfos as registry}
         <!-- containerDesktopAPI.Registry row start -->
         <div
-          class="flex flex-col w-full border-t border-gray-900"
+          class="flex flex-col w-full border-t border-gray-900 text-[var(--pd-invert-content-card-text)]"
           role="row"
           aria-label="{registry.name ? registry.name : registry.serverUrl}">
           <div class="flex flex-row items-center pt-4 pb-3 space-x-2">
@@ -348,17 +348,17 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
                 <!-- Show/hide password end -->
                 <!-- containerDesktopAPI.Registry menu start -->
                 <DropdownMenu>
-                  <DropdownMenuItem
+                  <DropdownMenu.Item
                     title="Login"
                     onClick="{() => markRegistryAsModified(registry)}"
                     hidden="{!!registry.username && !!registry.secret}"
                     icon="{faUser}" />
-                  <DropdownMenuItem
+                  <DropdownMenu.Item
                     title="Edit password"
                     onClick="{() => markRegistryAsModified(registry)}"
                     hidden="{!registry.username && !registry.secret}"
                     icon="{faUserPen}" />
-                  <DropdownMenuItem
+                  <DropdownMenu.Item
                     title="Remove"
                     onClick="{() => removeExistingRegistry(registry)}"
                     icon="{faTrash}" />
@@ -370,7 +370,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
         <div class="flex flex-row-reverse w-full pb-3 -mt-2">
           <span class="w-2/3 pl-4 text-sm font-bold">
             {#if originRegistries.some(r => r.serverUrl === registry.serverUrl)}
-              {errorResponses.find(o => o.serverUrl === registry.serverUrl)?.error || ''}
+              {errorResponses.find(o => o.serverUrl === registry.serverUrl)?.error ?? ''}
             {/if}
           </span>
         </div>
@@ -380,7 +380,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
       {#each $registriesSuggestedInfos as registry, i (registry)}
         <!-- Add new registry form start -->
         <div
-          class="flex flex-col w-full border-t border-gray-900"
+          class="flex flex-col w-full border-t border-gray-900 text-[var(--pd-invert-content-card-text)]"
           role="row"
           aria-label="{registry.name ? registry.name : registry.url}">
           <div class="flex flex-row items-center pt-4 pb-3 space-x-2">
@@ -395,7 +395,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
                       height="24" />
                   {/if}
                   <!-- By default, just show the name, but if we go to add it, show the full URL including https -->
-                  <span class="ml-2 text-gray-700">
+                  <span class="ml-2">
                     {#if listedSuggestedRegistries[i]}
                       https://{registry.url}
                     {:else}
@@ -444,7 +444,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
           <div class="flex flex-row w-full pb-3 -mt-2 pl-10">
             {#if listedSuggestedRegistries[i]}
               <span class="text-sm font-bold whitespace-pre-line">
-                {errorResponses.find(o => o.serverUrl === newRegistryRequest.serverUrl)?.error || ''}
+                {errorResponses.find(o => o.serverUrl === newRegistryRequest.serverUrl)?.error ?? ''}
               </span>
             {/if}
           </div>
@@ -454,7 +454,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
 
       {#if showNewRegistryForm}
         <!-- Add new registry form start -->
-        <div class="flex flex-col w-full border-t border-gray-900">
+        <div class="flex flex-col w-full border-t border-gray-900 text-[var(--pd-invert-content-card-text)]">
           <div class="flex flex-row items-center pt-4 pb-3 space-x-2">
             <div class="pl-5 text-sm w-2/5">
               <Input
@@ -484,7 +484,7 @@ function removeExistingRegistry(registry: containerDesktopAPI.Registry) {
           </div>
           <div class="flex flex-row w-full pb-3 -mt-2 pl-10">
             <span class="text-sm font-bold whitespace-pre-line">
-              {errorResponses.find(o => o.serverUrl === newRegistryRequest.serverUrl)?.error || ''}
+              {errorResponses.find(o => o.serverUrl === newRegistryRequest.serverUrl)?.error ?? ''}
             </span>
           </div>
         </div>

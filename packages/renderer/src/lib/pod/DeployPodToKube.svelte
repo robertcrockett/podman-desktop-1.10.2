@@ -1,20 +1,16 @@
 <script lang="ts">
 import { faExternalLink, faRocket } from '@fortawesome/free-solid-svg-icons';
 import type { V1NamespaceList, V1Pod } from '@kubernetes/client-node/dist/api';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, Checkbox, ErrorMessage, Input, Link } from '@podman-desktop/ui-svelte';
 import * as jsYaml from 'js-yaml';
 import { onDestroy, onMount } from 'svelte';
 import { router } from 'tinro';
 
 import { ensureRestrictedSecurityContext } from '/@/lib/pod/pod-utils';
-import Checkbox from '/@/lib/ui/Checkbox.svelte';
+import type { V1Route } from '/@api/openshift-types';
 
-import type { V1Route } from '../../../../main/src/plugin/api/openshift-types';
 import MonacoEditor from '../editor/MonacoEditor.svelte';
-import Button from '../ui/Button.svelte';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
-import Link from '../ui/Link.svelte';
 import WarningMessage from '../ui/WarningMessage.svelte';
 
 export let resourceId: string;
@@ -385,7 +381,7 @@ function updateKubeResult() {
 <FormPage title="Deploy generated pod to Kubernetes" inProgress="{deployStarted && !deployFinished}">
   <i class="fas fa-rocket fa-2x" slot="icon" aria-hidden="true"></i>
 
-  <div slot="content" class="p-5 min-w-full h-fit">
+  <div slot="content" class="px-5 pb-5 min-w-full h-fit">
     <div class="bg-charcoal-600 p-5">
       {#if kubeDetails}
         <p>Generated Kubernetes YAML:</p>
@@ -403,30 +399,31 @@ function updateKubeResult() {
 
       <div class="pt-2 pb-4">
         <label for="services" class="block mb-1 text-sm font-medium text-gray-300">Kubernetes Services:</label>
-        <div class="flex flex-row">
-          <Checkbox bind:checked="{deployUsingServices}" name="useServices" id="useServices" required />
-          <span class="text-gray-400 text-sm ml-1"
-            >Replace .hostPort exposure on containers by Services. It is the recommended way to expose ports, as a
-            cluster policy may prevent to use hostPort.</span>
-        </div>
+        <Checkbox
+          bind:checked="{deployUsingServices}"
+          class="text-gray-400 text-sm ml-1"
+          name="useServices"
+          id="useServices"
+          required>
+          Replace .hostPort exposure on containers by Services. It is the recommended way to expose ports, as a cluster
+          policy may prevent to use hostPort.</Checkbox>
       </div>
 
       <div class="pt-2 pb-4">
         <label for="useRestricted" class="block mb-1 text-sm font-medium text-gray-300"
           >Restricted Security Context:</label>
-        <div class="flex flex-row">
-          <Checkbox
-            bind:checked="{deployUsingRestrictedSecurityContext}"
-            name="useRestricted"
-            id="useRestricted"
-            title="Use restricted security context"
-            required />
-          <span class="text-gray-400 text-sm ml-1">
-            Update Kubernetes manifest to respect the Pod security <Link
-              externalRef="https://kubernetes.io/docs/concepts/security/pod-security-standards#restricted"
-              >restricted profile</Link
-            >.</span>
-        </div>
+        <Checkbox
+          bind:checked="{deployUsingRestrictedSecurityContext}"
+          class="text-gray-400 text-sm ml-1"
+          name="useRestricted"
+          id="useRestricted"
+          title="Use restricted security context"
+          required>
+          Update Kubernetes manifest to respect the Pod security <Link
+            on:click="{() =>
+              window.openExternal('https://kubernetes.io/docs/concepts/security/pod-security-standards#restricted')}"
+            >restricted profile</Link
+          >.</Checkbox>
       </div>
 
       <!-- Only show for non-OpenShift deployments (we use routes for OpenShift) -->
@@ -434,18 +431,16 @@ function updateKubeResult() {
         <div class="pt-2 pb-4">
           <label for="createIngress" class="block mb-1 text-sm font-medium text-gray-300"
             >Expose Service Locally Using Kubernetes Ingress:</label>
-          <div class="flex flex-row">
-            <Checkbox
-              bind:checked="{createIngress}"
-              name="createIngress"
-              id="createIngress"
-              title="Create Ingress"
-              required />
-            <span class="text-gray-300 text-sm ml-1">
-              Create an Ingress to get access to the local ports exposed, at the default Ingress Controller location.
-              Example: On default kind cluster created with Podman Desktop, it will be accessible at 'localhost:9090'.
-              Requirements: Your cluster must have an Ingress Controller.</span>
-          </div>
+          <Checkbox
+            bind:checked="{createIngress}"
+            class="text-gray-300 text-sm ml-1"
+            name="createIngress"
+            id="createIngress"
+            title="Create Ingress"
+            required>
+            Create an Ingress to get access to the local ports exposed, at the default Ingress Controller location.
+            Example: On default kind cluster created with Podman Desktop, it will be accessible at 'localhost:9090'.
+            Requirements: Your cluster must have an Ingress Controller.</Checkbox>
         </div>
       {/if}
 
@@ -473,11 +468,13 @@ function updateKubeResult() {
       {#if openshiftRouteGroupSupported}
         <div class="pt-2 m-2">
           <label for="routes" class="block mb-1 text-sm font-medium text-gray-400">Create OpenShift routes:</label>
-          <div class="flex flex-row">
-            <Checkbox bind:checked="{deployUsingRoutes}" name="useRoutes" id="useRoutes" required />
-            <span class="text-gray-400 text-sm ml-1"
-              >Create OpenShift routes to get access to the exposed ports of this pod.</span>
-          </div>
+          <Checkbox
+            bind:checked="{deployUsingRoutes}"
+            class="text-gray-400 text-sm ml-1"
+            name="useRoutes"
+            id="useRoutes"
+            required>
+            Create OpenShift routes to get access to the exposed ports of this pod.</Checkbox>
         </div>
       {/if}
 

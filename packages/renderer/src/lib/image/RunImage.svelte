@@ -1,24 +1,23 @@
 <script lang="ts">
 import { faFolderOpen, faMinusCircle, faPlay, faPlusCircle } from '@fortawesome/free-solid-svg-icons';
-import { Input } from '@podman-desktop/ui-svelte';
+import { Button, Checkbox, ErrorMessage, Input, Tab } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import { router } from 'tinro';
 
 import { array2String } from '/@/lib/string/string.js';
-import Button from '/@/lib/ui/Button.svelte';
+import type { ContainerCreateOptions, HostConfig } from '/@api/container-info';
+import type { ImageInspectInfo } from '/@api/image-inspect-info';
+import type { NetworkInspectInfo } from '/@api/network-info';
 
-import type { ContainerCreateOptions, HostConfig } from '../../../../main/src/plugin/api/container-info';
-import type { ImageInspectInfo } from '../../../../main/src/plugin/api/image-inspect-info';
-import type { NetworkInspectInfo } from '../../../../main/src/plugin/api/network-info';
 import Route from '../../Route.svelte';
 import { containersInfos } from '../../stores/containers';
 import { runImageInfo } from '../../stores/run-image-store';
 import { ContainerUtils } from '../container/container-utils';
 import type { ContainerInfoUI } from '../container/ContainerInfoUI';
 import { splitSpacesHandlingDoubleQuotes } from '../string/string';
-import ErrorMessage from '../ui/ErrorMessage.svelte';
 import FormPage from '../ui/FormPage.svelte';
-import Tab from '../ui/Tab.svelte';
+import NumberInput from '../ui/NumberInput.svelte';
+import { getTabUrl, isTabSelected } from '../ui/Util';
 import type { ImageInfoUI } from './ImageInfoUI';
 
 interface PortInfo {
@@ -114,9 +113,9 @@ onMount(async () => {
   containerPortMapping = [];
 
   imageInspectInfo = await window.getImageInspect(image.engineId, image.id);
-  exposedPorts = Array.from(Object.keys(imageInspectInfo?.Config?.ExposedPorts || {}));
+  exposedPorts = Array.from(Object.keys(imageInspectInfo?.Config?.ExposedPorts ?? {}));
 
-  command = array2String(imageInspectInfo.Config?.Cmd || []);
+  command = array2String(imageInspectInfo.Config?.Cmd ?? []);
 
   if (imageInspectInfo.Config?.Entrypoint) {
     if (typeof imageInspectInfo.Config.Entrypoint === 'string') {
@@ -287,7 +286,7 @@ async function startContainer() {
     // filter variables withouts keys
     .filter(env => env.key)
     // no value, use empty string
-    .map(env => `${env.key}=${env.value || ''}`);
+    .map(env => `${env.key}=${env.value ?? ''}`);
 
   // filter empty files
   const EnvFiles = environmentFiles.filter(env => env);
@@ -599,36 +598,25 @@ function onPortInput(event: Event, portInfo: PortInfo, updateUI: () => void) {
   const target = event.currentTarget as HTMLInputElement;
   // convert string to number
   const _value: number = Number(target.value);
-  // if number is not valid (NaN or outside the value range), set the error
-  if (isNaN(_value) || _value < 0 || _value > 65535) {
-    portInfo.error = 'port should be >= 0 and < 65536';
-    updateUI();
-    return;
-  }
   onPortInputTimeout = setTimeout(() => {
-    isPortFree(_value).then(isFree => {
-      portInfo.error = isFree;
-      updateUI();
-    });
+    window
+      .isFreePort(_value)
+      .then(_ => {
+        portInfo.error = '';
+        updateUI();
+      })
+      .catch((error: unknown) => {
+        if (error && typeof error === 'object' && 'message' in error) {
+          portInfo.error = (error as { message: string }).message;
+        }
+        updateUI();
+      });
   }, 500);
-}
-
-function isPortFree(port: number): Promise<string> {
-  return window
-    .isFreePort(port)
-    .then(isFree => {
-      if (!isFree) {
-        return `Port ${port} is already in use`;
-      } else {
-        return '';
-      }
-    })
-    .catch((_: unknown) => `Port ${port} is already in use`);
 }
 
 async function assertAllPortAreValid(): Promise<void> {
   const invalidHostPorts = hostContainerPortMappings.filter(pair => pair.hostPort.error);
-  const invalidContainerPortMapping = containerPortMapping?.filter(port => port.error) || [];
+  const invalidContainerPortMapping = containerPortMapping?.filter(port => port.error) ?? [];
   invalidPorts = invalidHostPorts.length > 0 || invalidContainerPortMapping.length > 0;
 }
 </script>
@@ -639,13 +627,25 @@ async function assertAllPortAreValid(): Promise<void> {
       <svelte:fragment slot="icon">
         <i class="fas fa-play fa-2x" aria-hidden="true"></i>
       </svelte:fragment>
-      <div slot="content" class="p-5 min-w-full h-fit">
+      <div slot="content" class="px-5 pb-5 min-w-full h-fit">
         <div class="bg-charcoal-600 px-6 py-4 space-y-2 lg:px-8 sm:pb-6 xl:pb-8">
           <div class="flex flex-row px-2 border-b border-charcoal-400">
-            <Tab title="Basic" url="basic" />
-            <Tab title="Advanced" url="advanced" />
-            <Tab title="Networking" url="networking" />
-            <Tab title="Security" url="security" />
+            <Tab
+              title="Basic"
+              selected="{isTabSelected($router.path, 'basic')}"
+              url="{getTabUrl($router.path, 'basic')}" />
+            <Tab
+              title="Advanced"
+              selected="{isTabSelected($router.path, 'advanced')}"
+              url="{getTabUrl($router.path, 'advanced')}" />
+            <Tab
+              title="Networking"
+              selected="{isTabSelected($router.path, 'networking')}"
+              url="{getTabUrl($router.path, 'networking')}" />
+            <Tab
+              title="Security"
+              selected="{isTabSelected($router.path, 'security')}"
+              url="{getTabUrl($router.path, 'security')}" />
           </div>
           <div>
             <Route path="/basic" breadcrumb="Basic" navigationHint="tab">
@@ -787,21 +787,11 @@ async function assertAllPortAreValid(): Promise<void> {
               <div class="h-96 overflow-y-auto pr-4">
                 <!-- Use tty -->
                 <label for="containerTty" class="block mb-2 text-sm font-medium text-gray-400">Use TTY:</label>
-                <div class="flex flex-row justify-start items-center align-middle w-full text-gray-700 text-sm">
-                  <input
-                    type="checkbox"
-                    bind:checked="{useTty}"
-                    class="mx-2 outline-none text-sm"
-                    aria-label="Attach a pseudo terminal" />
-                  Attach a pseudo terminal
-                </div>
-                <div class="flex flex-row justify-start items-center align-middle w-full text-gray-700 text-sm">
-                  <input
-                    type="checkbox"
-                    bind:checked="{useInteractive}"
-                    class="mx-2 outline-none text-sm"
-                    aria-label="Use interactive" />
-                  Interactive: Keep STDIN open even if not attached
+                <div class="flex flex-col text-gray-700 text-sm ml-2">
+                  <Checkbox bind:checked="{useTty}" title="Attach a pseudo terminal">Attach a pseudo terminal</Checkbox>
+                  <Checkbox bind:checked="{useInteractive}" title="Use interactive">
+                    Interactive: Keep STDIN open even if not attached
+                  </Checkbox>
                 </div>
 
                 <!-- Specify user-->
@@ -817,10 +807,9 @@ async function assertAllPortAreValid(): Promise<void> {
                 <!-- Autoremove-->
                 <label for="containerAutoRemove" class="pt-4 block mb-2 text-sm font-medium text-gray-400"
                   >Auto removal of container:</label>
-                <div class="flex flex-row justify-start items-center align-middle w-full text-gray-700 text-sm">
-                  <input type="checkbox" bind:checked="{autoRemove}" class="mx-2 outline-none text-sm" />
+                <Checkbox class="text-gray-700 text-sm ml-2" bind:checked="{autoRemove}">
                   Automatically remove the container when the process exits
-                </div>
+                </Checkbox>
 
                 <!-- RestartPolicy-->
                 <label for="containerRestartPolicy" class="pt-4 block mb-2 text-sm font-medium text-gray-400"
@@ -848,12 +837,10 @@ async function assertAllPortAreValid(): Promise<void> {
                   <span
                     class="text-sm w-28 inline-block align-middle whitespace-nowrap text-gray-700"
                     title="Number of times to retry before giving up.">Retries:</span>
-                  <input
-                    type="number"
-                    min="0"
+                  <NumberInput
+                    minimum="{0}"
                     bind:value="{restartPolicyMaxRetryCount}"
-                    placeholder="Number of times to retry before giving up"
-                    class="w-full p-2 outline-none text-sm bg-charcoal-800 rounded-sm text-gray-700 placeholder-gray-700"
+                    class="w-24 p-2"
                     disabled="{restartPolicyName !== 'on-failure'}" />
                 </div>
               </div>
@@ -864,18 +851,16 @@ async function assertAllPortAreValid(): Promise<void> {
                 <!-- Privileged-->
                 <label for="containerPrivileged" class="block mb-2 text-sm font-medium text-gray-400"
                   >Privileged:</label>
-                <div class="flex flex-row justify-start items-center align-middle w-full text-gray-700 text-sm">
-                  <input type="checkbox" bind:checked="{privileged}" class="mx-2 outline-none text-sm" />
+                <Checkbox bind:checked="{privileged}" class="text-gray-700 text-sm mx-2">
                   Turn off security<i class="pl-1 fas fa-exclamation-triangle"></i>
-                </div>
+                </Checkbox>
 
                 <!-- Read-Only -->
                 <label for="containerReadOnly" class="pt-4 block mb-2 text-sm font-medium text-gray-400"
                   >Read only:</label>
-                <div class="flex flex-row justify-start items-center align-middle w-full text-gray-700 text-sm">
-                  <input type="checkbox" bind:checked="{readOnly}" class="mx-2 outline-none text-sm" />
+                <Checkbox bind:checked="{readOnly}" class="text-gray-700 text-sm mx-2">
                   Make containers root filesystem read-only
-                </div>
+                </Checkbox>
 
                 <label for="ContainerSecurityOptions" class="pt-4 block mb-2 text-sm font-medium text-gray-400"
                   >Security options (security-opt):</label>
@@ -1037,7 +1022,7 @@ async function assertAllPortAreValid(): Promise<void> {
                       bind:value="{networkingModeUserNetwork}">
                       {#each engineNetworks as network}
                         <option value="{network.Id}"
-                          >{network.Name} (used by {Object.keys(network.Containers || {}).length} containers)</option>
+                          >{network.Name} (used by {Object.keys(network.Containers ?? {}).length} containers)</option>
                       {/each}
                     </select>
                   </div>

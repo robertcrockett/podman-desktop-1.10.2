@@ -26,6 +26,8 @@ import * as extensionApi from '@podman-desktop/api';
 
 import { isLinux, isMac, isWindows } from './util';
 
+const configurationRosetta = 'setting.rosetta';
+
 /**
  * Manages access to the containers.conf configuration file used to configure Podman
  */
@@ -93,21 +95,98 @@ export class PodmanConfiguration {
     ) {
       await extensionApi.proxy.setProxy(proxySettings);
     }
+
+    // If we are on Mac, we need to monitor the configuration file to handle Rosetta changes
+    if (isMac()) {
+      extensionApi.configuration.onDidChangeConfiguration(async e => {
+        if (e.affectsConfiguration(`podman.${configurationRosetta}`)) {
+          await this.handleRosettaSetting();
+        }
+      });
+    }
+  }
+
+  async handleRosettaSetting(): Promise<void> {
+    // If the configuration does not exist, we will default to true
+    // if true, when we do updateRosettaSetting, if there is no configuration file, it will do nothing.
+    const useRosetta = extensionApi.configuration.getConfiguration('podman').get<boolean>(configurationRosetta) ?? true;
+    await this.updateRosettaSetting(useRosetta);
+  }
+
+  async updateRosettaSetting(useRosetta: boolean): Promise<void> {
+    // Initalize an empty configuration file for us to use
+    const containersConfContent = {
+      containers: toml.Section({}),
+      engine: toml.Section({
+        env: [] as string[],
+      }),
+      machine: toml.Section({}),
+      network: toml.Section({}),
+      secrets: toml.Section({}),
+      configmaps: toml.Section({}),
+    };
+
+    // If the file does NOT exist and useRosetta is being set as false, we will have to create the file and write rosetta = false
+    if (!useRosetta && !fs.existsSync(this.getContainersFileLocation())) {
+      containersConfContent['machine'] = toml.Section({
+        rosetta: false as boolean,
+      });
+      const content = toml.stringify(containersConfContent, { newline: '\n' });
+      await fs.promises.writeFile(this.getContainersFileLocation(), content);
+    } else if (fs.existsSync(this.getContainersFileLocation())) {
+      // Read the file
+      const containersConfigFile = await this.readContainersConfigFile();
+      const tomlConfigFile = toml.parse(containersConfigFile);
+
+      // Copy over the previous configuration
+      if (tomlConfigFile.containers && typeof tomlConfigFile.containers === 'object') {
+        containersConfContent['containers'] = tomlConfigFile.containers;
+      }
+      if (tomlConfigFile.machine && typeof tomlConfigFile.machine === 'object') {
+        containersConfContent['machine'] = tomlConfigFile.machine;
+      }
+      if (tomlConfigFile.network && typeof tomlConfigFile.network === 'object') {
+        containersConfContent['network'] = tomlConfigFile.network;
+      }
+      if (tomlConfigFile.secrets && typeof tomlConfigFile.secrets === 'object') {
+        containersConfContent['secrets'] = tomlConfigFile.secrets;
+      }
+      if (tomlConfigFile.configmaps && typeof tomlConfigFile.configmaps === 'object') {
+        containersConfContent['configmaps'] = tomlConfigFile.configmaps;
+      }
+
+      // If useRosetta is true, edit containersConfContent['machine'] and remove the rosetta key if found.
+      // this is because rosetta is true by default and we don't need to set it in the file
+      if (useRosetta && containersConfContent['machine'] && 'rosetta' in containersConfContent['machine']) {
+        delete containersConfContent['machine']['rosetta'];
+      } else if (!useRosetta && containersConfContent['machine']) {
+        // If rosetta key does not exist, we need to add it
+        containersConfContent['machine'] = toml.Section({
+          ...containersConfContent['machine'], // MAKE SURE we copy over the previous configuration
+          rosetta: false as boolean,
+        });
+      }
+
+      // Write the file
+      const content = toml.stringify(containersConfContent, { newline: '\n' });
+      await fs.promises.writeFile(this.getContainersFileLocation(), content);
+    }
   }
 
   async updateProxySettings(proxySettings: ProxySettings | undefined): Promise<void> {
+    // create empty config file
+    const containersConfContent = {
+      containers: toml.Section({}),
+      engine: toml.Section({
+        env: [] as string[],
+      }),
+      machine: toml.Section({}),
+      network: toml.Section({}),
+      secrets: toml.Section({}),
+      configmaps: toml.Section({}),
+    };
+
     if (!fs.existsSync(this.getContainersFileLocation())) {
-      // file does not exist, needs to create an empty one
-      const containersConfContent = {
-        containers: toml.Section({}),
-        engine: toml.Section({
-          env: [],
-        }),
-        machine: toml.Section({}),
-        network: toml.Section({}),
-        secrets: toml.Section({}),
-        configmaps: toml.Section({}),
-      };
       if (proxySettings?.httpProxy && proxySettings?.httpProxy !== '') {
         containersConfContent['engine'].env.push(`http_proxy=${proxySettings.httpProxy}`);
       }
@@ -124,21 +203,32 @@ export class PodmanConfiguration {
     } else {
       // read the content of the file
       const containersConfigFile = await this.readContainersConfigFile();
-      let tomlConfigFile = toml.parse(containersConfigFile);
-      if (!tomlConfigFile) {
-        tomlConfigFile = {};
+      const tomlConfigFile = toml.parse(containersConfigFile);
+
+      // we need to create a ReadonlyTable so that we can write it later, so we copy the content of tomlConfigFile inside containersConfContent
+      if (tomlConfigFile.containers && typeof tomlConfigFile.containers === 'object') {
+        containersConfContent['containers'] = tomlConfigFile.containers;
+      }
+      if (tomlConfigFile.machine && typeof tomlConfigFile.machine === 'object') {
+        containersConfContent['machine'] = tomlConfigFile.machine;
+      }
+      if (tomlConfigFile.network && typeof tomlConfigFile.network === 'object') {
+        containersConfContent['network'] = tomlConfigFile.network;
+      }
+      if (tomlConfigFile.secrets && typeof tomlConfigFile.secrets === 'object') {
+        containersConfContent['secrets'] = tomlConfigFile.secrets;
+      }
+      if (tomlConfigFile.configmaps && typeof tomlConfigFile.configmaps === 'object') {
+        containersConfContent['configmaps'] = tomlConfigFile.configmaps;
       }
 
-      if (!tomlConfigFile.engine) {
-        tomlConfigFile.engine = {};
-      }
-
-      let engineEnv: string[];
-      if (!tomlConfigFile.engine['env']) {
-        engineEnv = [];
-        tomlConfigFile.engine['env'] = engineEnv;
-      } else {
-        engineEnv = tomlConfigFile.engine['env'];
+      let engineEnv: string[] = [];
+      if (tomlConfigFile.engine && typeof tomlConfigFile.engine === 'object' && 'env' in tomlConfigFile.engine) {
+        if (!tomlConfigFile.engine['env']) {
+          engineEnv = [];
+        } else {
+          engineEnv = tomlConfigFile.engine['env'] as string[];
+        }
       }
 
       // now update values
@@ -197,8 +287,9 @@ export class PodmanConfiguration {
         }
       }
 
+      containersConfContent['engine'].env = engineEnv;
       // write the file
-      const content = toml.stringify(tomlConfigFile, { newline: '\n' });
+      const content = toml.stringify(containersConfContent, { newline: '\n' });
       await fs.promises.writeFile(this.getContainersFileLocation(), content);
     }
   }
@@ -213,15 +304,15 @@ export class PodmanConfiguration {
     return false;
   }
 
-  protected getContainersFileLocation(): string {
-    let podmanConfigContainersPath;
+  getContainersFileLocation(): string {
+    let podmanConfigContainersPath = '';
 
     if (isMac()) {
       podmanConfigContainersPath = path.resolve(os.homedir(), '.config', 'containers');
     } else if (isWindows()) {
       podmanConfigContainersPath = path.resolve(os.homedir(), 'AppData', 'Roaming', 'containers');
     } else if (isLinux()) {
-      const xdgRuntimeDirectory = process.env['XDG_RUNTIME_DIR'];
+      const xdgRuntimeDirectory = process.env['XDG_RUNTIME_DIR'] ?? '';
       podmanConfigContainersPath = path.resolve(xdgRuntimeDirectory, 'containers');
     }
 
